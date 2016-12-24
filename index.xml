@@ -2,30 +2,30 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Fun iOS</title>
-    <link>https://broomburgo.github.io/Fun-iOS/index.xml</link>
+    <link>https://broomburgo.github.io/fun-ios/index.xml</link>
     <description>Recent content on Fun iOS</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2016</copyright>
     <lastBuildDate>Sat, 24 Dec 2016 15:28:07 +0100</lastBuildDate>
-    <atom:link href="https://broomburgo.github.io/Fun-iOS/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://broomburgo.github.io/fun-ios/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
       <title>test2</title>
-      <link>https://broomburgo.github.io/Fun-iOS/post/test2/</link>
+      <link>https://broomburgo.github.io/fun-ios/post/test2/</link>
       <pubDate>Sat, 24 Dec 2016 15:28:07 +0100</pubDate>
       
-      <guid>https://broomburgo.github.io/Fun-iOS/post/test2/</guid>
+      <guid>https://broomburgo.github.io/fun-ios/post/test2/</guid>
       <description>&lt;p&gt;This is another test.&lt;/p&gt;
 </description>
     </item>
     
     <item>
       <title>test</title>
-      <link>https://broomburgo.github.io/Fun-iOS/post/test/</link>
+      <link>https://broomburgo.github.io/fun-ios/post/test/</link>
       <pubDate>Sat, 24 Dec 2016 15:06:00 +0100</pubDate>
       
-      <guid>https://broomburgo.github.io/Fun-iOS/post/test/</guid>
+      <guid>https://broomburgo.github.io/fun-ios/post/test/</guid>
       <description>&lt;p&gt;This is a test.&lt;/p&gt;
 </description>
     </item>
