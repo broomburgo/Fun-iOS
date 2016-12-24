@@ -1,4 +1,4 @@
-baseurl = "http://replace-this-with-your-hugo-site.com/"
+baseurl = "https://broomburgo.github.io/Fun-iOS/"
 disablePathToLower = false
 languageCode = "en-us"
 title = "Fun iOS"
