@@ -34,7 +34,7 @@ paginate = 6
 	continueReadingText = "Read more"
 
   # # Google analytics code
-  # googleAnalytics = "google analytics"
+  googleAnalytics = "UA-89456601-1"
 
 	# Disqus shortcode
 	# Disable comments for a specific post by adding "comments: false" in its frontmatter
