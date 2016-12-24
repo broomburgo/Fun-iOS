@@ -7,8 +7,18 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2016</copyright>
-    <lastBuildDate>Sat, 24 Dec 2016 15:28:07 +0100</lastBuildDate>
+    <lastBuildDate>Sat, 24 Dec 2016 15:48:37 +0100</lastBuildDate>
     <atom:link href="https://broomburgo.github.io/fun-ios/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>test3</title>
+      <link>https://broomburgo.github.io/fun-ios/post/test3/</link>
+      <pubDate>Sat, 24 Dec 2016 15:48:37 +0100</pubDate>
+      
+      <guid>https://broomburgo.github.io/fun-ios/post/test3/</guid>
+      <description>&lt;p&gt;This is yet another test.&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>test2</title>
