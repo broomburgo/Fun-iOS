@@ -1,8 +1,10 @@
 +++
 date = "2016-08-25T10:38:47+02:00"
 draft = true
-title = "Code reuse: a primer"
-categories = ["essay"]
+title = "The reason for this"
+categories = ["update"]
+
+type = "post"
 
 +++
 
@@ -42,7 +44,7 @@ Semantically, we can describe a `Signal` as a container for a value that's going
 
 What follows is the entire implementation of the `Signal` class:
 
-``` swift
+```swift
 public enum SignalContinuation
 {
   case Continue
@@ -108,7 +110,7 @@ public class Signal<Subtype>
 
 This is really simple, but still, really powerful. A problem that's frequently found when implementing the observer pattern is how to manage unsubscriptions; it's a responsibility of the observer object to stop observing something, and in this `Signal` implementation this is easily managed within the closure passed to the `observe` method: the closure must return a `SignalContinuation` value, that can be simply `.Continue` (that is, keep observing updates) or `.Stop`. Another problem is memory management: we need to make sure that when an observer's memory is released, it will also stop observing, or a message will be sent to a dangling pointer, resulting in the app crashing. Swift's `weak` memory semantics actually makes this really easy to do: we'll put a `guard` clause at the beginning of the closure passed to the `observe` method; if the object has become `nil`, we'll simply return `.Stop`. The following example shows a simple use of the `Signal` class, including the *stop-observing-on-nil* mechanism:
 
-``` swift
+```swift
 class Sender
 {
   let signal = Signal<Int>()
@@ -150,7 +152,7 @@ sender.signal.send(20)
 
 In the example we can see an application of the concepts we talked about at the beginning of this article: instead of creating yet another interface for the same behavior, we are directly using and reusing the `Signal` object. A more complex example would be the addition of something like a *resonator*, that is, an object with a `Signal` that resonates with another, like in the following example:
 
-``` swift
+```swift
 class DoublingResonator
 {
   let signal = Signal<Int>()
