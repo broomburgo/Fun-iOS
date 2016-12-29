@@ -53,13 +53,13 @@ paginate = 6
 	# defaultKeywords = ["keyword1" , "keyword2" , "keyword3" , "keyword4"]
 
   [params.highlight]
-    style = "github"
+    style = "ocean"
     languages = ["swift"]
 
-    [[params.social]]
-      url = "https://github.com/broomburgo"
-      fa_icon = "fa-github"
+  [[params.social]]
+    url = "https://github.com/broomburgo"
+    fa_icon = "fa-github"
 
-    [[params.social]]
-      url = "https://twitter.com/_logicist"
-      fa_icon = "fa-twitter"
+  [[params.social]]
+    url = "https://twitter.com/_logicist"
+    fa_icon = "fa-twitter"
