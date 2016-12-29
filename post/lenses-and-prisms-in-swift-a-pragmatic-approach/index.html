@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lenses and Prisms in Swift: a pragmatic approach | Fun iOS</title>
+<link rel="stylesheet" href="https://broomburgo.github.io/fun-ios//css/style.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/ocean.min.css">
+
+
+    
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-89456601-1', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+
+
+<section class="section">
+  <div class="container">
+    <nav class="nav">
+      <div class="nav-left">
+        <a class="nav-item" href="https://broomburgo.github.io/fun-ios/"><h1 class="title is-4">Fun iOS</h1></a>
+      </div>
+      <div class="nav-right">
+        <nav class="nav-item level is-mobile">
+          
+          <a class="level-item" href="https://github.com/broomburgo">
+            <span class="icon">
+              <i class="fa fa-github"></i>
+            </span>
+          </a>
+          
+          <a class="level-item" href="https://twitter.com/_logicist">
+            <span class="icon">
+              <i class="fa fa-twitter"></i>
+            </span>
+          </a>
+          
+        </nav>
+      </div>
+    </nav>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="subtitle is-6">December 29, 2016</h2>
+    <h1 class="title">Lenses and Prisms in Swift: a pragmatic approach</h1>
+    <div class="content">
+      
+
+<p>The concept of <a href="https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/basic-lensing">functional lens</a> has become pretty popular in <strong>functional programming</strong> circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like <a href="https://medium.com/@dtipson/functional-lenses-d1aba9e52254#.wv5xkpy7a">Javascript</a>. Kickstarter&rsquo;s own <a href="http://www.fewbutripe.com">Brandon Williams</a> has done an excellent job in introducing lenses to the <a href="https://www.youtube.com/watch?v=ofjehH9f-CU&amp;t=1475s">Swift community</a>, and in showing <a href="https://www.youtube.com/watch?v=ofjehH9f-CU&amp;t=1475s">practical examples</a> when working with something like <code>UIView</code>, a radically <strong>OOP construct</strong> that an iOS developer has to work with on a daily basis.</p>
+
+<p>I&rsquo;d like to offer a more in depth view on why lenses can be useful in Swift, and also talk about a similar/different thing called <strong>Prism</strong>: it&rsquo;s likely that everyone that&rsquo;s interested in lenses has heard about prisms but it seems like, while the basic intuition behind a lens can be grasped, the one behind a prism is kind of obscure. But before that, it might be important to discover again the concept on <strong>Lens</strong>: I&rsquo;d like to do that because, by reading the comments for <a href="https://www.youtube.com/watch?v=ofjehH9f-CU">this</a> video, I understand that <strong>there&rsquo;s some confusion</strong>, mixed with the usual hostility towards functional programming concepts by some OOP people (luckily, a minority) who consider functional programming pointlessly complex: it&rsquo;s really the opposite, that is, it&rsquo;s simple but initially hard to grasp. And simple/complex <a href="https://www.infoq.com/presentations/Simple-Made-Easy">is not the same thing</a> as easy/hard.</p>
+
+<p>So, let&rsquo;s start from the beginning and talk about lenses, but in a more pragmatic way, that is, let&rsquo;s consider some <strong>practical problems</strong> and see if a traditional, idiomatic (and imperative) Swift approach can be enough or not. The code from this post is available on <a href="https://gist.github.com/broomburgo/bdc956243be2c3806a3d38e4d207008b">GitHub Gist</a>, and I strongly suggest to follow the Gist while reading the post, even if I&rsquo;m still going to recall most of the code here.</p>
+
+<h2 id="retrieval-and-mutation-of-values-in-idiomatic-swift">Retrieval and mutation of values in idiomatic Swift</h2>
+
+<p>First of all, a quick word on <strong>immutability</strong>: using immutable objects is a <a href="http://wiki.c2.com/?ValueObjectsShouldBeImmutable">very</a>, <a href="http://www.yegor256.com/2014/06/09/objects-should-be-immutable.html">very</a> good idea when those objects represent some kind of data structure, and to do this when working with classes in Swift we must have only <code>let</code> (constant) properties. But Swift <code>struct</code> and <code>enum</code> have <em>value semantics</em>, that is, they&rsquo;re not passed around as reference but as value, thus they&rsquo;re deep copied when passed from a context to another. This means that we really don&rsquo;t need to have immutable structs: the only thing that&rsquo;s needed is <em>immutable variables</em> (thus, <strong>constants</strong>) that hold those structs. Of course we can make the variables mutable if we need to modify the data structure somehow: not a problem, because when modifying an object with value semantics, actually a new, deep copied object will be created, and the <strong>copy-on-write</strong> mechanism will assure us that performance and memory usage are both optimal. So, the following example structs will all have <code>var</code> properties.</p>
+
+<pre><code class="language-swift">struct Company {
+	var name: String
+	var board: BoardOfDirectors
+}
+
+struct BoardOfDirectors {
+	var ceo: Employee
+	var cto: Employee
+	var cfo: Employee
+	var coo: Employee
+}
+
+struct Employee {
+	let name: String
+	let salary: Salary
+}
+
+struct Salary {
+	var amount: Double
+	var bonus: Double
+}
+</code></pre>
+
+<p>In our use case, we probably extracted an instance of <code>Company</code> from a repository, and because we want to change the CEO&rsquo;s bonus (let&rsquo;s halve it, shall we?), we could manually do this:</p>
+
+<pre><code class="language-swift">/// example 1
+
+var com = Repository.getCompany
+com.board.ceo.salary.bonus *= 0.5
+Repository.setCompany(com)
+</code></pre>
+
+<p>This seems perfectly fine, and it&rsquo;s made possible by the fact that every property is a <code>var</code>; it&rsquo;s also clear and readable: we can see at-a-glance that we are halving the CEO&rsquo;s bonus. Now we decide that we want to give the CTO a raise, let&rsquo;s say that they&rsquo;re going to earn an average between the CEO and the CFO. First, let&rsquo;s define an <code>average</code> function:</p>
+
+<pre><code class="language-swift">extension Double {
+	static func average(_ values: Double...) -&gt; Double {
+		return values.reduce(0, +)/Double(values.count)
+	}
+}
+</code></pre>
+
+<p>Then, let&rsquo;s execute the required action:</p>
+
+<pre><code class="language-swift">/// example 2
+
+var com = Repository.getCompany
+let ceoSalary = com.board.ceo.salary
+let cfoSalary = com.board.cfo.salary
+com.board.cto.salary.amount = Double.average(ceoSalary.amount,cfoSalary.amount)
+Repository.setCompany(com)
+</code></pre>
+
+<p>It seems <em>kind of</em> ok: it&rsquo;s not really clear what we&rsquo;re doing by just glancing at the code, because the logic is not clearly expressed, and it&rsquo;s not separated from the internal workings of the code. The fact that we need <strong>a series of statements</strong> in a certain order, and that we need to hold values in temporary constants to make the thing more readable are just <strong>noise</strong> that obfuscate the logic. Let&rsquo;s see a final example. We want to change the bonus of the CFO this way: we want to make sure than the bonus is not less than the 6% of their salary; if it is, set the bonus to 6% of the salary; if it&rsquo;s not, leave it alone.</p>
+
+<pre><code class="language-swift">/// example 3
+
+var com = Repository.getCompany
+let cfoAmount = com.board.cfo.salary.amount
+var cfoBonus = com.board.cfo.salary.bonus
+if cfoBonus/cfoAmount &lt; 0.06 {
+	cfoBonus = cfoAmount*0.06
+}
+com.board.cfo.salary.bonus = cfoBonus
+Repository.setCompany(com)
+</code></pre>
+
+<p>Now the logic is mostly lost in the code workings for retrieval and setting, and we also need to create a temporary variable <code>cfoBonus</code> that will increase the probability of making mistakes. We would really like to separate the logic needed to <em>get</em> and <em>set</em> the needed properties, from the <em>business logic</em>, that is, the <em>rules</em> that we want to apply to our data. <em>Lenses</em> have exactly this purposes: they atomically express the <em>get</em> and <em>set</em> operations.</p>
+
+<h2 id="using-lenses-to-abstract-set-and-get-operations">Using lenses to abstract <code>set</code> and <code>get</code> operations</h2>
+
+<p>The reason why they&rsquo;re called &ldquo;lenses&rdquo; is that the basic intuition is the one of <strong>focusing</strong> on a particular part of a data structure: once we focused on that, we can retrieve it and change it with ease. Also, lenses are <em>composable</em>, which means that if a lens acts on a structure <code>A</code> by focusing on the subpart <code>B</code>, and another lens acts on a structure <code>B</code> by focusing on the subpart <code>C</code>, we can <em>join</em> them to create a lens that acts on a structure <code>A</code> by focusing on the sub-subpart <code>C</code>, which is of course great for nested data structures. And here lies the power of lenses: composition, to create more complex actions from simpler ones.</p>
+
+<p>I&rsquo;m reporting the full implementation of lenses that I&rsquo;m going to use here, please refer to the companion Gist for clearer code:</p>
+
+<pre><code class="language-swift">protocol LensType {
+	associatedtype WholeType
+	associatedtype PartType
+
+	var get: (WholeType) -&gt; PartType { get }
+	var set: (PartType,WholeType) -&gt; WholeType { get }
+
+	init(get: @escaping (WholeType) -&gt; PartType, set: @escaping (PartType,WholeType) -&gt; WholeType)
+}
+
+struct Lens&lt;Whole,Part&gt;: LensType {
+	typealias WholeType = Whole
+	typealias PartType = Part
+
+	let get: (Whole) -&gt; Part /// get the &quot;focused&quot; part
+	let set: (Part,Whole) -&gt; Whole /// set a new value for the &quot;focused&quot; part
+
+	init(get: @escaping (Whole) -&gt; Part, set: @escaping (Part,Whole) -&gt; Whole) {
+		self.get = get
+		self.set = set
+	}
+}
+
+extension LensType {
+	func over(_ transform: @escaping (PartType) -&gt; PartType) -&gt; (WholeType) -&gt; WholeType {
+		return { whole in self.set(transform(self.get(whole)),whole) }
+	}
+
+	func join&lt;Subpart, OtherLens: LensType&gt;(_ other: OtherLens) -&gt; Lens&lt;WholeType,Subpart&gt; where OtherLens.WholeType == PartType, OtherLens.PartType == Subpart {
+		return Lens&lt;WholeType,Subpart&gt;(
+			get: { other.get(self.get($0)) },
+			set: { (subpart: Subpart, whole: WholeType) -&gt; WholeType in
+					self.set(other.set(subpart,self.get(whole)),whole)
+		})
+	}
+	
+	func zip&lt;OtherPart, OtherLens: LensType&gt;(_ other: OtherLens) -&gt; Lens&lt;WholeType,(PartType,OtherPart)&gt; where OtherLens.WholeType == WholeType, OtherLens.PartType == OtherPart {
+		return Lens&lt;WholeType,(PartType,OtherPart)&gt;(
+			get: { (self.get($0),other.get($0)) },
+			set: { other.set($0.1,self.set($0.0,$1)) })
+	}
+}
+</code></pre>
+
+<p>A <code>Lens</code> is really just a pair of functions:</p>
+
+<ul>
+<li>a function to <code>get</code> a property from a data structure;</li>
+<li>a function to <code>set</code> a new value for a property in a data structure, returning the modified structure.</li>
+</ul>
+
+<p>The power of lenses is mostly in:</p>
+
+<ul>
+<li>the <code>join</code> function, that composes two lenses with matching part/whole;</li>
+<li>the <code>over</code> function, that modifies a property of a data structure based on the previous value, returning the new structure;</li>
+<li>the <code>zip</code> function, that mixes together two lenses with the same whole part, so we can apply both at the same time, by retrieving/modifying two things together.</li>
+</ul>
+
+<p>Names of functions are mostly arbitrary, and actually it&rsquo;s frequent to use custom operators for them, but I prefer methods. To rewrite the previous examples with lenses, we need to add some lenses to every <code>struct</code>: please refer to the companion Gist for the implementation.</p>
+
+<p>For the first example, things are going to appear actually messier. Let&rsquo;s define a couple of lenses:</p>
+
+<pre><code class="language-swift">let onCEO = Company.lens.board.join(BoardOfDirectors.lens.ceo)
+let onSalaryAmount = Employee.lens.salary.join(Salary.lens.amount)
+</code></pre>
+
+<p>We are going to reuse these a lot, and thanks to the very <em>lens abstraction</em> we can generically define objects that will somehow act on a certain part of a data structure. The <em>action</em> required in <code>example 1</code> is to halve the CEO&rsquo;s salary amount, something that we can easily express by combining lenses, without the need of a living variable instance of <code>Company</code>:</p>
+
+<pre><code class="language-swift">let action: (Company) -&gt; Company = onCEO.join(onSalaryAmount).over { $0*0.5 }
+</code></pre>
+
+<p>Notice that I specified the <strong>type</strong> of <code>action</code>: it&rsquo;s a function that transforms a <code>Company</code>. In fact, pretty much everything we did in the previous examples was to take the current company, put it into a <code>var</code>, that is, a mutable reference, modify something, and then store the company again. We can abstract the whole process with the following:</p>
+
+<pre><code class="language-swift">func updateCompany(with action: (Company) -&gt; Company) {
+	Repository.setCompany(action(Repository.getCompany))
+}
+</code></pre>
+
+<p>The <code>update</code> function takes a <code>(Company) -&gt; Company</code> function as an input, and it&rsquo;s very easy to generate those with lenses, no mutable references needed. The first example then becomes:</p>
+
+<pre><code class="language-swift">/// example 1 with lenses
+
+updateCompany(with: onCEO.join(onSalaryAmount).over { $0*0.5 })
+</code></pre>
+
+<p>For the second example, let&rsquo;s define another couple of completely reusable lenses:</p>
+
+<pre><code class="language-swift">let onCTO = Company.lens.board.join(BoardOfDirectors.lens.cto)
+let onCFO = Company.lens.board.join(BoardOfDirectors.lens.cfo)
+</code></pre>
+
+<p>With these, the second example becomes:</p>
+
+<pre><code class="language-swift">/// example 2 with lenses
+
+updateCompany {
+	onCTO.join(onSalaryAmount)
+		.set(Double.average(
+			onCEO.join(onSalaryAmount).get($0),
+			onCFO.join(onSalaryAmount).get($0)),
+				 $0)
+}
+</code></pre>
+
+<p>This looks messier on first sight, but the problem is really one of familiarity, because here, without creating temporary variables, we&rsquo;re pretty clearly defining the logic:</p>
+
+<ul>
+<li><code>updateCompany</code>: we&rsquo;re going to update a <code>Company</code>;</li>
+<li><code>onCTO.join(onSalaryAmount)</code>: by acting on CTO&rsquo;s salary amount;</li>
+<li><code>.set(Double.average</code>: it&rsquo;s going to be an average;</li>
+<li><code>onCEO.join(onSalaryAmount).get</code> and <code>onCFO.join(onSalaryAmount).get</code>: of the salary amount of the CEO and CFO.</li>
+</ul>
+
+<p>I&rsquo;d say that the logic is clearly expressed if you&rsquo;re familiar with the constructs, and in general with working with <strong>higher-order functions</strong>, but the case still doesn&rsquo;t seem to be particularly on point.</p>
+
+<p>Let&rsquo;s see the third example:</p>
+
+<pre><code class="language-swift">/// example 3 with lenses
+
+updateCompany(with: onCFO.join(onSalaryAmount)
+	.zip(onCFO.join(onSalaryBonus))
+	.over { (amount,bonus) in
+		if bonus/amount &lt; 0.06 {
+				return (amount,amount*0.06)
+			} else {
+				return (amount,bonus)
+			}
+})
+</code></pre>
+
+<p>Something&rsquo;s happened: we are mixing together actions from <code>onCFO.join(onSalaryAmount)</code> and <code>onCFO.join(onSalaryBonus)</code>, because the logic needs both, and in the <code>over</code> method we are pretty clearly expressing the logic, away from boilerplate and code machinery. I think we can pretty clearly see here that by putting the logic needed to <em>access</em> the properties of a data structure at any level of depth away from the main business logic, we can write more readable, maintainable and safe code: actually, safety is given mostly because the examples with lenses feature <em>a single expression</em> that&rsquo;s type-checked, and not multiple temporary variable and/or multiple statements that must resolve in a certain order.</p>
+
+<p>But still, from a pragmatic standpoint, this seems decent but not great. I&rsquo;m probably not making a strong case for lenses in Swift, and that&rsquo;s mostly thanks to the value semantics of structs. But notice that if our structs had immutable properties, the code in the regular examples would change pretty radically, and in a bad way, while the code with lenses would be <strong>exactly the same</strong>: lenses don&rsquo;t care about immutability, because the set/get part is abstracted away, and the only thing that we need to care about when working with them is the actual business logic. Just try it yourself by copying the Gist in a playground: switch some properties to <code>let</code>, and watch the imperative world burn. Of course we&rsquo;d face the same problems with classes instead of structs: in working with classes, it would be better to have <code>let</code> properties to make the classes immutable, and in that case lenses would really save the day.</p>
+
+<p>Finally, I think there&rsquo;s great value in being able to <strong>express a simple action with a function</strong>, and more complex actions by composing those simple functions: that&rsquo;s one of the main reasons why I develop software in a functional style. But I can understand at least a bit of diffidence, if not complete refusal, towards a concept like &ldquo;lens&rdquo; that at first seems so abstract and pointlessly hard to understand. Still, I hope I was able to make a case for using lenses for your data structures.</p>
+
+<h2 id="traversing-a-loosely-typed-data-structure">Traversing a loosely typed data structure</h2>
+
+<p>A problem arises when we&rsquo;re working with a data structure that&rsquo;s not completely defined in terms of <strong>types</strong>. For example, when we <strong>deserialize</strong> some JSON data with <code>JSONSerialization</code>, we get an object of type <code>Any</code>: usually a server will output a dictionary, that is, a collection of key-value pairs, where keys are strings, and values are whatever the documentation tells. But everyone that&rsquo;s ever worked with JSON knows that in parsing a JSON is not a good idea to just <strong>assume things</strong> and force-unwrap everything: in fact, popular Swift libraries like <a href="https://github.com/thoughtbot/Argo">Argo</a> make possible to parse JSON in a type-safe and error-aware way.</p>
+
+<p>Now, what happens when we apply lenses to a <code>[String:Any]</code> dictionary? For example, we&rsquo;ve been told that there&rsquo;s a key <code>user</code>, at which there&rsquo;s another <code>[String:Any]</code> containing the various properties of a user, like the name, a <code>String</code> at the key <code>name</code>. A lens could seem a good strategy to retrieve the name, or to generate a new structure with a different name et cetera, but what are the &ldquo;whole&rdquo; and the &ldquo;part&rdquo; here? Well:</p>
+
+<ul>
+<li>in the first case, both the whole and the part are <code>[String:Any]</code>, because we have a dictionary and we expect another dictionary at the key <code>user</code>;</li>
+<li>in the second case the whole is again <code>[String:Any]</code>, but the part is a <code>String</code>.</li>
+</ul>
+
+<p>Unfortunately, if we try to create a generic lens for this use case we end up with the following:</p>
+
+<pre><code class="language-swift">typealias AnyDict = [String:Any]
+
+func anyDictLens&lt;Part&gt;(at key: String, as: Part) -&gt; Lens&lt;AnyDict,Part&gt; {
+	return Lens&lt;AnyDict,Part&gt;(
+		get: { (whole: AnyDict) -&gt; Part in whole[key] as! Part },
+		set: { (part: Part, whole: AnyDict) -&gt; AnyDict in
+			var m_dict = whole
+			m_dict[key] = part
+			return m_dict
+	})
+}
+</code></pre>
+
+<p>In the <code>get</code> function we need to force-unwrap the result of <code>whole[key]</code>, which is an <code>Optional&lt;Any&gt;</code>. We can see that, actually, a lens acting on a <code>AnyDict</code> has to be a lens that focuses on an <code>Optional</code>. In general, there&rsquo;s no need for a lens to reflect exactly the same types of the structure it&rsquo;s applied upon: in this particular case the part on which the lens focuses is really and <code>Optional&lt;Part&gt;</code>. Thus, the correct code is the following:</p>
+
+<pre><code class="language-swift">func anyDictLens&lt;Part&gt;(at key: String, as: Part) -&gt; Lens&lt;AnyDict,Part?&gt; {
+	return Lens&lt;AnyDict,Part?&gt;(
+		get: { (whole: AnyDict) -&gt; Part? in whole[key] as? Part },
+		set: { (part: Part?, whole: AnyDict) -&gt; AnyDict in
+			var m_dict = whole
+			m_dict[key] = part
+			return m_dict
+	})
+}
+</code></pre>
+
+<p>Now we can define a dictionary and a couple of lenses:</p>
+
+<pre><code class="language-swift">let dict: AnyDict = [&quot;user&quot; : [&quot;name&quot; : &quot;Mr. Creosote&quot;]]
+
+let lens1 = anyDictLens(at: &quot;user&quot;, as: AnyDict.self)
+let lens2 = anyDictLens(at: &quot;name&quot;, as: String.self)
+</code></pre>
+
+<p>Notice how we use the keys to define specific lenses, instead of the properties of a struct. This seems fine, until we try to join those lenses to focus at the desired depth of the dictionary:</p>
+
+<pre><code class="language-swift">let nameLens = lens1.join(lens2) /// this won't compile
+</code></pre>
+
+<p>To join two lenses, the <code>Part</code> of the first has to be the same as the <code>Whole</code> of the second, and <strong>there&rsquo;s no match here</strong>: the part of the first is <code>Optional&lt;AnyDict&gt;</code>, while the whole of the second is just <code>AnyDict</code>. We could &ldquo;cheat&rdquo; by defining a new <code>tryJoin</code> function:</p>
+
+<pre><code class="language-swift">func tryJoin&lt;A,B,C&gt;(_ left: Lens&lt;A,B?&gt;, _ right: Lens&lt;B,C?&gt;) -&gt; Lens&lt;A,C?&gt;
+</code></pre>
+
+<p>But this is ugly: we cannot define this as a method, and we cannot simply compose <code>get</code> and <code>set</code> like we did with <code>join</code>, <code>over</code> and <code>zip</code> (because we need to unwrap the optionals). This doesn&rsquo;t seem like a proper pattern for a lens. The point here is the following: when we apply lenses on a loosely typed data structure, the focused parts must be considered <em>either</em> some object of some type, <em>or nothing</em>, in the case where we don&rsquo;t find what we&rsquo;re searching for. That&rsquo;s really the specialty of a <em>Prism</em>.</p>
+
+<h2 id="prisms-in-swift">Prisms in Swift</h2>
+
+<p>Let&rsquo;s start with <strong>the basic intuition</strong> behind a prism. The idea behind a lens is the one of <em>focusing</em>: I <em>forget</em> the whole data structure and only act on a part of it. The prism, instead, is based on the concept of <em>dispersion</em> (if you&rsquo;re interested please refer to the <a href="https://en.wikipedia.org/wiki/Prism">Wikipedia</a> page): I <em>separate</em> a data structure in <em>possible</em> subparts, and either retrieve a subpart if it&rsquo;s there, or recreate the structure with just that part. Prisms are useful when we&rsquo;re dealing with data structures that are made of one possible part chosen among any, that is, a <em>sum type</em>: for example, <code>Optional</code> is a sum type, because an optional instance either contains something or nothing, it&rsquo;s one of the two.</p>
+
+<p>The main methods of a prism are:</p>
+
+<ul>
+<li><code>tryGet</code>, that gets the possible subpart if it&rsquo;s there, or <code>nil</code> (thus, it returns an <code>Optional</code>);</li>
+<li><code>inject</code>, that generates the full structure with a specific subpart.</li>
+</ul>
+
+<p>We can see the relation with Lens&rsquo; <code>get</code> and <code>set</code>. Here&rsquo;s a possible implementation, complete again with <code>tryOver</code>, <code>join</code> as <code>zip</code>:</p>
+
+<pre><code class="language-swift">protocol PrismType {
+	associatedtype WholeType
+	associatedtype PartType
+
+	var tryGet: (WholeType) -&gt; PartType? { get }
+	var inject: (PartType) -&gt; WholeType { get }
+
+	init(tryGet: @escaping (WholeType) -&gt; PartType?, inject: @escaping (PartType) -&gt; WholeType)
+}
+
+struct Prism&lt;Whole,Part&gt;: PrismType {
+	typealias WholeType = Whole
+	typealias PartType = Part
+
+	let tryGet: (Whole) -&gt; Part? /// get the part, if possible
+	let inject: (Part) -&gt; Whole /// changes the value to reflect the part that's injected in
+
+	init(tryGet: @escaping (Whole) -&gt; Part?, inject: @escaping (Part) -&gt; Whole) {
+		self.tryGet = tryGet
+		self.inject = inject
+	}
+}
+
+extension PrismType {
+	func tryOver(_ transform: @escaping (PartType) -&gt; PartType) -&gt; (WholeType) -&gt; WholeType? {
+		return { whole in self.tryGet(whole).map { self.inject(transform($0)) } }
+	}
+
+	func join&lt;OtherPart, OtherPrism&gt;(_ other: OtherPrism) -&gt; Prism&lt;WholeType,OtherPart&gt; where OtherPrism: PrismType, OtherPrism.WholeType == PartType, OtherPrism.PartType == OtherPart  {
+		return Prism&lt;WholeType,OtherPart&gt;(
+			tryGet: { self.tryGet($0).flatMap(other.tryGet) },
+			inject: { self.inject(other.inject($0)) })
+	}
+
+	func zip&lt;OtherWhole, OtherPrism&gt;(_ other: OtherPrism) -&gt; Prism&lt;(WholeType,OtherWhole),PartType&gt; where OtherPrism: PrismType, OtherPrism.PartType == PartType, OtherPrism.WholeType == OtherWhole {
+		return Prism&lt;(WholeType,OtherWhole),PartType&gt;(
+			tryGet: { (whole,otherWhole) in
+				self.tryGet(whole) ?? other.tryGet(otherWhole)
+		},
+			inject: { part in
+				(self.inject(part),other.inject(part))
+		})
+	}
+}
+</code></pre>
+
+<p>At this point we can redefine our <code>anyDict</code> function in terms of prisms, and generate prisms to use in our dictionary:</p>
+
+<pre><code class="language-swift">func anyDictPrism&lt;Part&gt;(at key: String, as: Part.Type) -&gt; Prism&lt;AnyDict,Part&gt; {
+	return Prism&lt;AnyDict,Part&gt;(
+		tryGet: { $0[key] as? Part },
+		inject: { [key:$0] })
+}
+
+let prism1 = anyDictPrism(at: &quot;user&quot;, as: AnyDict.self)
+let prism2 = anyDictPrism(at: &quot;name&quot;, as: String.self)
+
+let namePrism = prism1.join(prism2)
+</code></pre>
+
+<p>Now <code>namePrism</code> can operate on a dictionary like the one defined before:</p>
+
+<pre><code class="language-swift">let name = namePrism.tryGet(dict) /// it's Mr. Creosote!
+</code></pre>
+
+<p>But a prism can also handle failing cases, like the following:</p>
+
+<pre><code class="language-swift">let prism3 = anyDictPrism(at: &quot;weight&quot;, as: String.self)
+
+let weightPrism = prism1.join(prism3)
+let weight = weightPrism.tryGet(dict) /// this is nil
+</code></pre>
+
+<p>That&rsquo;s a lot of code to digest, let&rsquo;s elaborate a little.</p>
+
+<p>The problem with traversing a loosely typed data structure is that, for every <code>get</code> call we need to check the retrieved object&rsquo;s type, if there&rsquo;s an object at all: that&rsquo;s going to be <strong>a lot of nested &ldquo;ifs&rdquo;</strong>. But we frequently deal with dictionaries, arrays, hashmaps et cetera, with loose type annotations, even in a strongly typed language like Swift: that&rsquo;s because we deal with serialization/deserialization of objects (for example, when we parse the output of a server after a HTTP request), and there&rsquo;s no way to precisely annotate the type of a deserialized object. In fact, <code>JSONSerialization</code> works with objects of type <code>Any</code> and, idiomatically or not, when working with JSON we need to <strong>safely unwrap</strong> objects if we don&rsquo;t want to incur in possible <strong>crashes</strong>. A prism incapsulates this very concept: traversing a data structure in which at every step we can find a number of possibilities.</p>
+
+<p>Other than <code>tryGet</code> there&rsquo;s the inverse operation, <code>inject</code>, which builds the whole data structure with the <em>path</em> defined by the prism. In our case, we can build a dictionary where there actually is a value for the <code>weight</code> key:</p>
+
+<pre><code class="language-swift">let otherDict = weightPrism.inject(&quot;200 kg&quot;) /// this is [&quot;user&quot;: [&quot;weight&quot;: &quot;200 kg&quot;]]
+</code></pre>
+
+<p>Notice that this doesn&rsquo;t depend on <code>dict</code>: it&rsquo;s an entirely new dictionary, but the structure of the data is the same (because <code>weightPrism</code> still derives from <code>prism1</code>). This seems less convenient than the <code>set</code> function of a lens, because <code>set</code> actually modified an existing structure, but the semantics of a prism is different: two different prisms acting on the same structure could generate different results, so to end up with a single <code>Whole</code> we need a way to <em>merge</em> them.</p>
+
+<p>To not leave this thread hanging, let&rsquo;s define an <code>override</code> function that acts on 2 <code>AnyDict</code> and merges them, giving priority to the second in case of matching keys (thus, <em>override</em>):</p>
+
+<pre><code class="language-swift">public func dictOverride(_ first: AnyDict, _ second: AnyDict) -&gt; AnyDict {
+	var m_dict = first
+	for (key,value) in second {
+		if let current = m_dict[key] {
+			if let firstAnyDict = current as? AnyDict, let secondAnyDict = value as? AnyDict {
+				m_dict[key] = dictOverride(firstAnyDict, secondAnyDict)
+			} else {
+				m_dict[key] = value
+			}
+		} else {
+			m_dict[key] = value
+		}
+	}
+	return m_dict
+}
+</code></pre>
+
+<p>This could be useful when working with types like <code>[String:Any]</code>, for example in this case:</p>
+
+<pre><code class="language-swift">let fullDict = dictOverride(dict, otherDict) /// this is [&quot;user&quot;: [&quot;name&quot;: &quot;Mr. Creosote&quot;, &quot;weight&quot;: &quot;200 kg&quot;]]
+</code></pre>
+
+<p>But this has nothing to do with the semantics of a prism: a prism will simply try and follow a particular line in a data structure, or in other words, <em>traverse</em> the structure with a certain logic.</p>
+
+<h2 id="prisms-composition-and-the-zip-function">Prisms composition and the <code>zip</code> function</h2>
+
+<p>This topic deserves it&rsquo;s own section because it&rsquo;s probably the most important one. As with lenses, the true power of prisms comes from the fact that they are composable, i.e., multiple, simple prisms can be combined to obtain more complex ones. For example, the <code>join</code> function can be used to create prisms that go <em>deeper</em> into a data structure. In the case of dictionaries we could imagine prisms that <strong>explore</strong> the dictionary until they find the requested object. Let&rsquo;s assume, for example, that we&rsquo;re asking a server to provide image urls for products, and that each product is (partially) represented like this:</p>
+
+<pre><code class="language-JSON">{
+  &quot;info&quot; : {
+    &quot;image&quot; : {
+      &quot;icon_urls&quot; : [
+        &quot;https://image.org/1.png&quot;,
+        &quot;https://image.org/2.png&quot;,
+        &quot;https://image.org/3.png&quot;
+      ]
+    }
+  }
+}
+</code></pre>
+
+<p>In Swift, considering different possibilities:</p>
+
+<pre><code class="language-swift">let jsonExample1 = [
+	&quot;info&quot; : [
+		&quot;image&quot; : [
+			&quot;icon_urls&quot; : [
+				&quot;https://image.org/1.png&quot;,
+				&quot;https://image.org/2.png&quot;,
+				&quot;https://image.org/3.png&quot;]]]]
+				
+let jsonExample2 = [
+	&quot;info&quot; : [
+		&quot;image&quot; : [
+			&quot;icon_urls&quot; : [String]()]]]
+
+let jsonExample3 = [
+	&quot;info&quot; : [
+		&quot;image&quot; : [
+			&quot;WRONG_KEY&quot; : [
+				&quot;https://image.org/1.png&quot;,
+				&quot;https://image.org/2.png&quot;,
+				&quot;https://image.org/3.png&quot;]]]]
+</code></pre>
+
+<p>Notice the nested structure (we&rsquo;re omitting everything else and just focusing on the image urls). Suppose we just need the first url (if any) from the urls array; then we can define a prism like the following:</p>
+
+<pre><code class="language-swift">let infoDictPrism = anyDictPrism(at: &quot;info&quot;, as: AnyDict.self)
+let imageDictPrism = anyDictPrism(at: &quot;image&quot;, as: AnyDict.self)
+let iconURLsPrism = anyDictPrism(at: &quot;icon_urls&quot;, as: [String].self)
+let firstURLPrism = Prism&lt;[String],String&gt;(
+	tryGet: { $0.first },
+	inject: { [$0] })
+let imageURLPrism1 = infoDictPrism
+	.join(imageDictPrism)
+	.join(iconURLsPrism)
+	.join(firstURLPrism)
+</code></pre>
+
+<p>Now we can <code>tryGet</code> the first URL with the following:</p>
+
+<pre><code class="language-swift">let firstURL = imageURLPrism1.tryGet(jsonExample1) /// this is &quot;https://image.org/1.png&quot;
+
+let noFirstURL = imageURLPrism1.tryGet(jsonExample2) /// this is nil
+
+let stillNoFirstURL = imageURLPrism1.tryGet(jsonExample3) /// this is nil
+</code></pre>
+
+<p>Our <code>imageURLPrism1</code> safely traverses the dictionary and extracts the desired information, if possible.</p>
+
+<p>Now imagine a JSON example like this:</p>
+
+<pre><code class="language-swift">let jsonExample4 = [
+	&quot;info&quot; : [
+		&quot;main_image_icon_url&quot; : &quot;https://image.org/3.png&quot;,
+		&quot;image&quot; : [
+			&quot;icon_urls&quot; : [
+				&quot;https://image.org/1.png&quot;,
+				&quot;https://image.org/2.png&quot;,
+				&quot;https://image.org/3.png&quot;]]]]
+</code></pre>
+
+<p>The logic here is the following: for the icon image, search for the &ldquo;main_image_icon_url&rdquo; key: if it&rsquo;s there and it&rsquo;s a <code>String</code>, use that string as url; if it&rsquo;s not, fall back to the &ldquo;icon_urls&rdquo; array and get the first element. There are 2 possible paths now to get the same information, and that would require 2 prisms, but those should not be joined: <em>join</em> means <em>concatenate</em>, that is, apply the prisms in series, but what we want to do is applying them <strong>in parallel</strong>. That&rsquo;s what the <code>zip</code> function is about. Notice the signature (I omitted the &ldquo;where&rdquo; part):</p>
+
+<pre><code class="language-swift">func zip&lt;OtherWhole, OtherPrism&gt;(_ other: OtherPrism) -&gt; Prism&lt;(WholeType,OtherWhole),PartType&gt;
+</code></pre>
+
+<p>The returned prism applies the two original prisms to 2 different &ldquo;whole&rdquo;, but considers the same &ldquo;part&rdquo;: even if the data structure is going the be the same for us, this is what we want, because the &ldquo;part&rdquo; is the same, it&rsquo;s just that two different prisms in general will <em>decompose</em> and <em>recompose</em> 2 different data structures, but the <em>isolated</em> component has to be the same. Let&rsquo;s define the new <code>imageURLPrism2</code>:</p>
+
+<pre><code class="language-swift">let imageURLPrism2 = infoDictPrism.join(anyDictPrism(at: &quot;main_image_icon_url&quot;, as: String.self))
+</code></pre>
+
+<p>Finally, let&rsquo;s zip the prisms and apply them to <code>jsonExample4</code> and <code>jsonExample1</code>:</p>
+
+<pre><code class="language-swift">let finalURL1 = imageURLPrism2.zip(imageURLPrism1).tryGet(jsonExample4,jsonExample4) /// this is &quot;https://image.org/3.png&quot;
+let finalURL2 = imageURLPrism2.zip(imageURLPrism1).tryGet(jsonExample1,jsonExample1) /// this is &quot;https://image.org/1.png&quot;
+
+</code></pre>
+
+<p>We got <code>&quot;https://image.org/3.png&quot;</code> as <code>finalURL1</code> because the first prism takes priority over the second one, and <code>finalURL2</code> is going to be <code>&quot;https://image.org/1.png&quot;</code> simply because there&rsquo;s no <code>&quot;main_image_icon_url&quot;</code>.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>That&rsquo;s it for prisms and lenses in Swift. Of course there are many more applications for both, but I hope I was able to make a case for using these constructs, that in my opinion help both clarity of code and maintainability. Some time investment has to be made to wrap our head around these abstractions, but after a while I can assure you it&rsquo;s going to be pretty natural to use them and more importantly to <em>think</em> in terms of them.</p>
+
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <aside><div id="disqus_thread"></div></aside>
+    <script type="text/javascript">
+      var disqus_shortname = 'fun-ios';
+      (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+      })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container has-text-centered">
+    <p>&copy; <a href="https://github.com/broomburgo">Elviro Rocca</a> 2016</p>
+  </div>
+</section>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
+
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/languages/swift.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
