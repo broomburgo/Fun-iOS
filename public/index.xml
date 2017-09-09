@@ -7,10 +7,20 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2016</copyright>
-    <lastBuildDate>Thu, 29 Dec 2016 11:19:50 +0100</lastBuildDate>
+    <lastBuildDate>Sat, 09 Sep 2017 20:10:00 +0000</lastBuildDate>
     
 	<atom:link href="https://broomburgo.github.io/fun-ios/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>On Abstraction</title>
+      <link>https://broomburgo.github.io/fun-ios/post/on-abstraction/</link>
+      <pubDate>Sat, 09 Sep 2017 20:10:00 +0000</pubDate>
+      
+      <guid>https://broomburgo.github.io/fun-ios/post/on-abstraction/</guid>
+      <description>This post is a direct answer to this other post, which itself is mostly an answer to a bunch of discussions on Twitter, talks and more posts. While this post has probably value by itself, it&amp;rsquo;s probably better to read the original post first, because I&amp;rsquo;m going to refer to some of its statements.
+ There&amp;rsquo;s an interesting discussion going in the functional Swift community: whether using abstract data types, like Monoid, is actually useful, and how this relates to the way protocols are usually laid out in the standard library.</description>
+    </item>
     
     <item>
       <title>Lenses and Prisms in Swift: a pragmatic approach</title>
@@ -18,7 +28,8 @@
       <pubDate>Thu, 29 Dec 2016 11:19:50 +0100</pubDate>
       
       <guid>https://broomburgo.github.io/fun-ios/post/lenses-and-prisms-in-swift-a-pragmatic-approach/</guid>
-      <description>The concept of functional lens has become pretty popular in functional programming circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like Javascript. Kickstarter&amp;rsquo;s own Brandon Williams has done an excellent job in introducing lenses to the Swift community, and in showing practical examples when working with something like UIView, a radically OOP construct that an iOS developer has to work with on a daily basis.</description>
+      <description>This article is a little outdated and doesn&amp;rsquo;t really represent anymore the actual way I use these concepts in my day-to-day work. I&amp;rsquo;m going to update it soon with some of the concepts expressed in my talk Lenses and Prisms in swift.
+ The concept of functional lens has become pretty popular in functional programming circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like Javascript.</description>
     </item>
     
   </channel>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On Abstraction | Fun iOS</title>
+<link rel="stylesheet" href="https://broomburgo.github.io/fun-ios//css/style.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/ocean.min.css">
+
+
+    
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-89456601-1', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+
+
+<section class="section">
+  <div class="container">
+    <nav class="nav">
+      <div class="nav-left">
+        <a class="nav-item" href="https://broomburgo.github.io/fun-ios/"><h1 class="title is-4">Fun iOS</h1></a>
+      </div>
+      <div class="nav-right">
+        <nav class="nav-item level is-mobile">
+          
+          <a class="level-item" href="https://github.com/broomburgo">
+            <span class="icon">
+              <i class="fa fa-github"></i>
+            </span>
+          </a>
+          
+          <a class="level-item" href="https://twitter.com/_logicist">
+            <span class="icon">
+              <i class="fa fa-twitter"></i>
+            </span>
+          </a>
+          
+        </nav>
+      </div>
+    </nav>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="subtitle is-6">September 9, 2017</h2>
+    <h1 class="title">On Abstraction</h1>
+    <div class="content">
+      
+
+<blockquote>
+<p>This post is a direct answer to <a href="http://belkadan.com/blog/2017/09/Over-abstraction/">this other post</a>, which itself is mostly an answer to a bunch of discussions on Twitter, talks and more posts. While this post has probably value by itself, it&rsquo;s probably better to read the original post first, because I&rsquo;m going to refer to some of its statements.</p>
+</blockquote>
+
+<hr />
+
+<p>There&rsquo;s an interesting discussion going in the functional Swift community: whether using abstract data types, like <a href="https://github.com/typelift/Abstract/blob/master/Sources/Abstract/Monoid.swift">Monoid</a>, is actually useful, and how this relates to the way protocols are usually laid out in the standard library. The peril seems to be a downward spiral into &ldquo;over-abstraction&rdquo;, that is, roughly, the reliance on software techniques that are so far removed from the concrete, underlying problems, that cost way too much in terms of intellectual reasoning without providing proportionally better results.</p>
+
+<p>The following piece is my take on the matter, and I thank <a href="https://twitter.com/UINT_MIN">the author</a> of the original article to have bootstrapped the discussion.</p>
+
+<h2 id="a-matter-of-perspective">A matter of perspective</h2>
+
+<p>First I would argue that there&rsquo;s no such thing as &ldquo;over-abstraction&rdquo;, because there&rsquo;s no measurable threshold: even if we assume that &ldquo;abstraction&rdquo; means &ldquo;protocol&rdquo; there&rsquo;s no way of defining a specific protocol as &ldquo;too abstract&rdquo;. It really depends on how one&rsquo;s expectancy for the &ldquo;contract&rdquo; that the interface should help holding actually relates to the original intention and semantics behind the interface itself. But if by &ldquo;over-abstraction&rdquo; the author meant <em>wrong</em> abstraction I 100% agree: not all abstractions are created equal, and most of the discussion on abstract data types is actually directed toward finding what are the <em>right</em> abstractions.</p>
+
+<p>The article takes <code>Sequence</code> and the fact that <code>Set</code> conforms to <code>Sequence</code> as an example of problematic abstraction, because <code>Sequence</code> declares methods like <code>dropFirst</code> but <code>Set</code> is unordered so the <em>first</em> element is undefined. But that doesn&rsquo;t seem a problem to me: <code>Sequence</code>, like <code>Monoid</code>, is not a contract; it&rsquo;s just a way of saying that a certain, concrete type, will allow a client to access all of its element in a sequential fashion, and that&rsquo;s it. It doesn&rsquo;t say anything about the order of the elements or their shape (in fact the element type is an associated type): things like these depend on the <strong>concrete</strong> type that implements <code>Sequence</code>. If the concrete type is <code>Set</code> or <code>Dictionary</code>, the first element will be undefined, and this depends on the concrete type itself. The <strong>only</strong> guarantee of <code>Sequence</code> is that all the elements will be accessed: <code>Sequence</code> doesn&rsquo;t even guarantee that the iteration will be non-destructive. But <code>Set</code> or any other type conforming to <code>Sequence</code> must guarantee that all the contained element will be accessed by a <code>for-in</code> cycle, and this is the only information that I can use if the only thing I know about a generic instance is that it&rsquo;s a <code>Sequence</code>. Notice that a function like this:</p>
+
+<pre><code class="language-swift">func doSomethingWithAllTheElements&lt;S&gt;(of sequence: S) where S: Sequence {
+	/// code
+}
+</code></pre>
+
+<p>could never terminate because a <code>Sequence</code> could be infinite. The potential bug depends on the concrete type that&rsquo;s being passed to the function, and in this case <code>Sequence</code> probably is too shallow as a requirement.</p>
+
+<p>Abstractions like <code>Sequence</code> are not just good because they let you reuse operations: that&rsquo;s not the point, the point is to specify some semantics for the underlying concrete type, and it&rsquo;s important to identify what those semantics are. <em>Then</em> you can define reusable operations, that would be meaningless without the explicit semantics. The <code>doSomethingWithAllTheElements</code> should take a <code>Collection</code>, that is guaranteed to be finite (because an <code>endIndex</code> must be provided). But if the function was <code>doSomethingWithTheFirst10TheElements</code> a <code>Sequence</code> would be fine: which the first 10 are depends on the concrete type. If we <em>really</em> needed some kind of ordering, probably something like this would be better:</p>
+
+<pre><code class="language-swift">func doSomethingWithTheFirst10ElementsAfterReordeing&lt;C&gt;(of collection: C) where C: Collection, C.Iterator.Element: Comparable {
+	/// code
+}
+</code></pre>
+
+<p>This way we are enforcing that we can <code>sort</code> the <code>Collection</code>, but the way it is sorted depends on how the collection elements implement <code>Comparable</code>: again, the actual implementation is left to the concrete type, we are just requiring certain semantics (for <code>Comparable</code>, a strict total order) and the ability to call certain methods, that without the semantics attached would be meaningless.</p>
+
+<blockquote>
+<p>A note: all this makes sense if we ask a programmer to be <strong>precise</strong> with their definitions, and in general abstract data types are concocted exactly for this reason: the will to be as precise as possible, thus improving one&rsquo;s ability to reason about code.</p>
+</blockquote>
+
+<p>The original article contains an example in which is shown that when talking about animals the appropriate words to use for calling them, taken from their biological hierarchy, depend on the context: sometimes a cat is better referred as &ldquo;a cat&rdquo; but in other contexts &ldquo;mammal&rdquo; could be better, and in other &ldquo;Siamese cat&rdquo; is the way to go. Totally agree, and this is exactly the point: we lay out these hierarchies of abstractions so that we can pick the level that we actually need for a certain process. But in programming this might actually lead to &ldquo;under-abstraction&rdquo;, and not the opposite. Take for example <a href="https://github.com/typelift/Abstract/pull/28">this pull request</a>: the author argues that <code>OptionalM&lt;M: Monoid&gt;: Monoid</code> should really be <code>OptionalM&lt;S: Semigroup&gt;: Monoid</code> because there&rsquo;s no requirement for the generic type to be <code>Monoid</code>, it&rsquo;s fine for it to be <code>Semigroup</code>. And he&rsquo;s right: we can use a more general (thus, of higher order) abstraction for the generic parameter. But we couldn&rsquo;t require for it to just be <code>Magma</code>: that would be over-abstracting, and it wouldn&rsquo;t work.</p>
+
+<p>One of the many differences between programming and natural language is that the mathematical roots of the former will allow a programmer to separate what makes sense from what doesn&rsquo;t in a very precise and foolproof way: we can still argue that &ldquo;mammal&rdquo; is not a useful term for a cat in many contexts, but in programming we can <em>prove</em> it more formally.</p>
+
+<h2 id="the-good-the-bad-and-the-ugly-abstraction">The good, the bad and the ugly abstraction</h2>
+
+<p>I pulled an example from an abstract data types library on purpose, because I really want to talk about what&rsquo;s good about those things, more than comparing them with different approaches.</p>
+
+<p>Building &ldquo;meaningful&rdquo; generic operations, while can be done and in fact it is, is not the point of defining and enforcing protocols like <code>Monoid</code>. The generic operations only follow from the semantic power acquired when we try to be precise with these concepts. By that I mean that <code>Monoid</code> comes <strong>before</strong> types already in the standard library (on anywhere else) that have a <em>natural</em> way to conform to it. We know for example that <code>String</code> and <code>Array</code> conform naturally to <code>Monoid</code> in the following way:</p>
+
+<pre><code>Monoid =&gt; String
+&lt;&gt; =&gt; +
+empty =&gt; &quot;&quot;
+
+Monoid =&gt; Array
+&lt;&gt; =&gt; +
+empty =&gt; []
+</code></pre>
+
+<p>But we don&rsquo;t define <code>Monoid</code> just because we have a couple of types that could take advantage of it. We define <code>Monoid</code> because we want to require a completely generic <em>composition</em> operation that is associative and as a <em>neutral</em> value.</p>
+
+<p>For example, a transitional value that represents some kind of feedback left from a user could be a <code>Monoid</code>, in the sense that partial instances of it could be composed in an associative way:</p>
+
+<pre><code class="language-swift">struct UserData {
+	let lastAccess: Date
+	let numberOfAccesses: Int
+	let feedbacks: Array&lt;String&gt;
+}
+</code></pre>
+
+<p>We would like for this type to be a monoid, so that if we have a stored value and a new one comes, that could be itself an aggregate of multiple accesses, we have a way to generically compose those values so that some properties hold.</p>
+
+<p>We could for example take always the highest date, add the number of accesses, and concatenate the feedbacks. Or we could redefine <code>UserData</code> like this:</p>
+
+<pre><code class="language-swift">struct UserData {
+	let lastAccess: Max&lt;Date&gt;
+	let numberOfAccesses: Add&lt;Int&gt;
+	let feedbacks: Array&lt;String&gt;
+}
+</code></pre>
+
+<p>What are <code>Max</code> and <code>Add</code>? Are <em>concrete types</em> that have a particular implementation of <code>Monoid</code>, like <code>Array</code> (that is already in the standard library). Now, because we can <em>prove</em> that a product of monoids (a struct or class in which all the properties are monoids) is itself a monoid if we compose the things in the most natural way, we can simply write:</p>
+
+<pre><code class="language-swift">extension UserData: Monoid {
+	static func &lt;&gt; (left: UserData, right: UserData) -&gt; UserData {
+		return UserData.init(
+			lastAccess: left.lastAccess &lt;&gt; right.lastAccess,
+			numberOfAccesses: left.numberOfAccesses &lt;&gt; right.numberOfAccesses,
+			feedbacks: left.feedbacks &lt;&gt; right.feedbacks)
+	}
+	
+	static let empty = UserData.init(
+			lastAccess: Max&lt;Date&gt;.empty,
+			numberOfAccesses: Add&lt;Int&gt;.empty,
+			feedbacks: Array&lt;String&gt;.empty)
+}
+</code></pre>
+
+<p>Notice that this code could have been written automatically by a code generation tool like <a href="https://github.com/krzysztofzablocki/Sourcery">Sourcery</a>.</p>
+
+<p>Now, one could argue that this could have been done in dozens of other ways: I 100% agree, and I&rsquo;m certainly not interested in asserting that this is <em>the best way</em> of doing it. What I&rsquo;m arguing is that a concept like <code>Monoid</code> emerges when we&rsquo;re discussing about what are <em>good abstractions</em> for representing a generic computational concept like <em>composition</em>, and tapping into decades of mathematical research (and modern mathematics is basically the science of abstraction) seems like a good idea. When discussing abstract data types and their applications in software development we&rsquo;re not interested in finding already existing concrete types that somehow already conform to those abstractions, but in defining new concrete types that could conform to the abstractions in interesting ways. That doesn&rsquo;t mean that some <em>classic</em> existing types don&rsquo;t naturally conform: for example a <code>(A) -&gt; A</code> is obviously a monoid, but the interesting thing is that also a <code>(A) -&gt; B where B: Monoid</code> is a monoid (in Swift these must be encapsulated in a struct).</p>
+
+<p>This misunderstanding could have led the author of the original article to observe that there&rsquo;s no point in having a <code>Additive</code> protocol that just support addition: in the context of abstract algebra <code>Additive</code> has no meaning by itself, but it&rsquo;s only used together with <code>Multiplicative</code> to define <code>+</code> and <code>*</code> operations (that are <strong>not necessarily</strong> sum and product) in which the <code>*</code> is <em>distributive</em> over <code>+</code>, thus:</p>
+
+<p><code>a*(b + c) = a*b + a*c</code></p>
+
+<p>where <code>a</code>, <code>b</code> and <code>c</code> may or may not be numbers. What I&rsquo;m personally finding more and more in my work is that these abstractions seem to have the magical property to pop up time after time in places were I initially had defined (like every programmer does) custom interfaces. As iterating a bunch of objects is a powerful generic idea, also the basic concept of &ldquo;composition&rdquo; with a distinguished &ldquo;empty&rdquo; element seems to be extremely pervasive and useful. Thus, I&rsquo;d rather tap into existing literature and conventions instead of coming up with new words to express the same things, which is notably <a href="https://martinfowler.com/bliki/TwoHardThings.html">the hardest thing in computer science</a>.</p>
+
+<h2 id="conventional-notation-is-one-less-problem-to-solve">Conventional notation is one less problem to solve</h2>
+
+<p>Why <code>&lt;&gt;</code>? Easy, it&rsquo;s <strong>convention</strong>. There&rsquo;s no particular reason to use a specific operator, but actually <strong>there are reasons</strong> to use an operator instead of a method or a named function.</p>
+
+<p>An operator is useful in a specific case: when the operation that it represents is repetitive. This:</p>
+
+<pre><code class="language-swift">1 + 2 + 3 + 4
+</code></pre>
+
+<p>is a lot better than this:</p>
+
+<pre><code class="language-swift">1.adding(2).adding(3).adding(4)
+</code></pre>
+
+<p>Using an operator for a specific operation that must be repeated several times improves the code readability by a large margin, there&rsquo;s simply less noise and more focus on the actual information content. The only sensible way to call a method that meant what <code>&lt;&gt;</code> expressed would probably be <code>compose</code> or <code>combine</code>, or even <code>putTogether</code> because that&rsquo;s what the operation represents by itself, and nothing else.</p>
+
+<p>But of course what&rsquo;s happening here:</p>
+
+<pre><code class="language-swift">Add(1) &lt;&gt; 2 &lt;&gt; 3 &lt;&gt; 4
+</code></pre>
+
+<p>is something completely different than what&rsquo;s happening here:</p>
+
+<pre><code class="language-swift">Max(1) &lt;&gt; 2 &lt;&gt; 3 &lt;&gt; 4
+</code></pre>
+
+<p>Shouldn&rsquo;t we use different operators, or (at that point) methods? No, because what <code>&lt;&gt;</code> means depends on the <em>context</em>: the whole meaning of the operation is entrusted to the <strong>concrete type</strong>. This is something that might confuse (at first) because in OOP we&rsquo;re used to verbose names for methods and classes, that are basically required because we try (and usually fail) to express the entire semantic content of a arbitrarily complex domain-specific operation just by using a few english words.</p>
+
+<p>So for example, if I see this code (taken from <a href="http://www.fewbutripe.com/swift/html/dsl/2017/06/29/composable-html-views-in-swift.html">one the articles from which the original article draws inspiration</a>):</p>
+
+<pre><code class="language-swift">let fullArticle: View&lt;Article, [Node]&gt; =
+  articleHeader
+    &lt;&gt; articleBody
+    &lt;&gt; articleFooter
+</code></pre>
+
+<p>to understand it I need to know exactly what <code>View&lt;A,B&gt;</code> is, but once I know it, I can fully predict what <code>fullArticle</code> will be. The meaning of <code>&lt;&gt;</code> depends on the context.</p>
+
+<p>The suggestion behind using abstract data types as protocols to be implemented by concrete types that represent specific operations is that, if again our goal is to be as precise as possible, we should define simple, precise operational Lego pieces and build our domain-specific objects by composing them. Is this precision really needed? I don&rsquo;t know, maybe, but it can be argued that it might unlock a much greater ability for us to actually reason about the code that we write.</p>
+
+<p>The study behind abstract data types and their usage in practical programming contexts (like the development of an iOS app) is about the protocols themselves, and not about finding abstractions to encapsulate existing concrete behaviors. It&rsquo;s also about defining concrete types that interpret the <em>composition</em> operation in a specific way, and about finding useful ways to combine these types. In fact, usually the concrete applications follow naturally where there already were specialized types with custom interfaces that required writing a bunch of code to express the same algorithm over and over again.</p>
+
+<p>There are certainly other approaches to the resolution of generic problems, but the one based on abstract data types looks really promising, and it&rsquo;s the one I found to work best in my experience for a range of applications.</p>
+
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <aside><div id="disqus_thread"></div></aside>
+    <script type="text/javascript">
+      var disqus_shortname = 'fun-ios';
+      (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+      })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container has-text-centered">
+    <p>&copy; <a href="https://github.com/broomburgo">Elviro Rocca</a> 2016</p>
+  </div>
+</section>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
+
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/languages/swift.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
