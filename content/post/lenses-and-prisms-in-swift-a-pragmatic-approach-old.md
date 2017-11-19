@@ -1,6 +1,6 @@
 +++
 date = "2016-12-29T11:19:50+01:00"
-title = "Lenses and Prisms in Swift: a pragmatic approach"
+title = "Lenses and Prisms in Swift: a pragmatic approach (old version)"
 type = "post"
 draft = true
 +++
