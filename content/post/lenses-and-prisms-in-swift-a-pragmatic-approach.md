@@ -1,537 +1,711 @@
 +++
-date = "2016-12-29T11:19:50+01:00"
 title = "Lenses and Prisms in Swift: a pragmatic approach"
+date = 2017-11-19T09:44:01+01:00
 type = "post"
 draft = false
 +++
 
-> This article is a little outdated and doesn't really represent anymore the actual way I use these concepts in my day-to-day work. I'm going to update it soon with some of the concepts expressed in my talk [Lenses and Prisms in swift](https://github.com/broomburgo/Lenses-and-Prisms-in-Swift).
+> This is a new version of an old article about lenses and prisms in Swift. This one contains many updates and more precisely reflects how I actually use these things in my work.  This is also based on a [talk](https://github.com/broomburgo/Lenses-and-Prisms-in-Swift) I gave at [iOSDevUK 2017](https://www.iosdevuk.com) and [Mobilization Conference 2017](http://2017.mobilization.pl). I'm keeping the [old article](https://github.com/broomburgo/fun-ios/blob/master/content/post/lenses-and-prisms-in-swift-a-pragmatic-approach-old.md) in draft as reference.
 
 ---
 
-The concept of [functional lens](https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/basic-lensing) has become pretty popular in **functional programming** circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like [Javascript](https://medium.com/@dtipson/functional-lenses-d1aba9e52254#.wv5xkpy7a). Kickstarter's own [Brandon Williams](http://www.fewbutripe.com) has done an excellent job in introducing lenses to the [Swift community](https://www.youtube.com/watch?v=ofjehH9f-CU), and in showing [practical examples](https://www.youtube.com/watch?v=A0VaIKK2ijM) when working with something like `UIView`, a radically **OOP construct** that an iOS developer has to work with on a daily basis.
+The concept of [functional lens](https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/basic-lensing) has become pretty popular in **functional programming** circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like [Javascript](https://medium.com/@dtipson/functional-lenses-d1aba9e52254#.wv5xkpy7a). [Brandon Williams](http://www.fewbutripe.com) has done an excellent job in introducing lenses to the [Swift community](https://www.youtube.com/watch?v=ofjehH9f-CU), and in showing [practical examples](https://www.youtube.com/watch?v=A0VaIKK2ijM) when working with something like `UIView`, a radically **OOP construct** that an iOS developer has to work with on a daily basis.
 
-I'd like to offer a more in depth view on why lenses can be useful in Swift, and also talk about a similar/different thing called **Prism**: it's likely that everyone that's interested in lenses has heard about prisms but it seems like, while the basic intuition behind a lens can be grasped, the one behind a prism is kind of obscure. But before that, it might be important to discover again the concept on **Lens**: I'd like to do that because, by reading the comments for [this](https://www.youtube.com/watch?v=ofjehH9f-CU) video, I understand that **there's some confusion**, mixed with the usual hostility towards functional programming concepts by some OOP people (luckily, a minority) who consider functional programming pointlessly complex: it's really the opposite, that is, it's simple but initially hard to grasp. And simple/complex [is not the same thing](https://www.infoq.com/presentations/Simple-Made-Easy) as easy/hard.
+I'd like to offer a more in depth view on why lenses can be useful in Swift, and also talk about a related concept called **Prism**: it's likely that everyone that's interested in lenses has heard about prisms but it seems like, while the basic intuition behind a lens can be grasped, the one behind a prism is kind of obscure. But before that, it might be important to discover again the concept on **Lens**: I'd like to do that because, by reading the comments for [this](https://www.youtube.com/watch?v=ofjehH9f-CU) video, I understand that **there's some confusion**, mixed with the usual hostility towards functional programming concepts by some OOP people (luckily, a minority) who consider functional programming pointlessly complex: it's really the opposite, that is, it's simple but initially hard to grasp. And *simple vs. complex* [is not the same thing](https://www.infoq.com/presentations/Simple-Made-Easy) as *easy vs. hard*.
 
-So, let's start from the beginning and talk about lenses, but in a more pragmatic way, that is, let's consider some **practical problems** and see if a traditional, idiomatic (and imperative) Swift approach can be enough or not. The code from this post is available on [GitHub Gist](https://gist.github.com/broomburgo/bdc956243be2c3806a3d38e4d207008b), and I strongly suggest to follow the Gist while reading the post, even if I'm still going to recall most of the code here.
+So, let's start from the beginning and talk about lenses, but in a more pragmatic way, that is, let's consider some **practical problems** and see if a traditional, idiomatic (and imperative) Swift approach can be enough or not. Most of the code from this post is available in a [Swift Playground](https://github.com/broomburgo/Lenses-and-Prisms-in-Swift/blob/master/Code.playground/Contents.swift), and I strongly recommend to follow the Playground while reading the post, even if I'm still going to recall most of the code here.
 
-## Retrieval and mutation of values in idiomatic Swift
+## Functional Getters and Setters
 
-First of all, a quick word on **immutability**: using immutable objects is a [very](http://wiki.c2.com/?ValueObjectsShouldBeImmutable), [very](http://www.yegor256.com/2014/06/09/objects-should-be-immutable.html) good idea when those objects represent some kind of data structure, and to do this when working with classes in Swift we must have only `let` (constant) properties. But Swift `struct` and `enum` have *value semantics*, that is, they're not passed around as reference but as value, thus they're deep copied when passed from a context to another. This means that we really don't need to have immutable structs: the only thing that's needed is *immutable variables* (thus, **constants**) that hold those structs. Of course we can make the variables mutable if we need to modify the data structure somehow: not a problem, because when modifying an object with value semantics, actually a new, deep copied object will be created, and the **copy-on-write** mechanism will assure us that performance and memory usage are both optimal. So, the following example structs will all have `var` properties.
+If you google "functional lens", you're probably going to end up with a definition like "functional getter and setter": in this context the word "functional" really means "immutable". There are many advantages in using immutable data models - I'm not going into it for this article - but modifying immutable models (i.e. generating new models with something changed) can be a chore, because the whole model must be reconstructed by taking the previous values where they didn't change, and setting the new values where they did. But Swift offers particular kinds of types, called "value types", that have [value semantics](https://en.wikipedia.org/wiki/Value_semantics), which basically means that they have no identity and only represent a "value", i.e., some kind of "information" that is implicitly immutable: a piece of information cannot change, but **new** information can be created, rendering the previous obsolete.
+
+For example, a `Int` is a value type: if I have a `2`, and I'm adding `1`, I'm not *mutating* the `2`... I'm creating a new instance called `3`. If it seems obvious it's because *it is* obvious for a type like `Int`, but in Swift we can also define complex types that have the exact same behavior.
+
+Swift `struct` and `enum` are value types: if I give you an instance of a struct, it's like I'm giving you a *copy* of my instance, which is not going to be mutated in any way, no matter what you do with your copy. This has many advantages and allows to safely reason about code. An interesting consequence is that one can safely define structs with `var` properties, because if I set a new value for a property of a struct, what Swift really does *under the hood* is generating a whole new reference to that instance, such that other referees won't see any change.
+
+For this reason, if I define in my code a struct or enum that have *memberwise* initializers - that is, they can be constructed with any possible value for the properties - I usually set all the properties as `var`. There are cases where you still want the `let`: maybe the struct **cannot** be constructed with any value for the properties (thus, some mutations wouldn't make sense), or maybe you *really* need a class for a model. Anyway, in this article's code, all the model structs will have `var` properties.
+
+For all these reasons I don't think that just the definition "functional getters and setters" is going to be useful for lenses and prisms, especially in languages that offer flexible value types like Swift. What makes these ideas interesting is their *composability*, that allows for building powerful abstractions, as we'll see.
+
+## A matter of relationship
+
+Lenses and prisms (and programming with *optics* in general) allow us to establish **relationships between data structures**. In particular, a *lens* is called like that because it allows to *focus* on a specific part of a data structure, and consequently to act on that part, like retrieving it, or modifying it causing a modification of the whole data structure. A *prism* is  a similar concept, but it works for [sum types](https://en.wikipedia.org/wiki/Tagged_union), that in Swift are represented via enum. Types like `class` and struct, that have *properties* (even a simple tuple), are called [product types](https://en.wikipedia.org/wiki/Product_type) and are manipulated by lenses; while *sum* or [**coproduct** types](https://en.wikipedia.org/wiki/Coproduct) are types like enum, that have *cases*, and are manipulated by prisms.
+
+Let's see it graphically:
+
+![](/fun-ios/images/lenses-and-prisms-in-swift-a-pragmatic-approach/data-structure.png)
+
+In the image we can see a schematic representation of a generic data structure: ovals are struct or `class` types, thus, types with properties; rectangles are enum types; dotted lines are properties; dashed lines are *cases* for enums.
+
+To define a `Lens` from the type `A`, that *contains* instances of  the types `B`, `C` and `D`, from one of the contained types, for example `B`, I need two functions:
+
+- a function called `get` that, given an `A`, will return a `B`;
+- a function called `set` that, given a `B`, will return a *transforming function* for `A`, thus, a function of type `(A) -> A`.
+
+This implies that `Lens` is parametrized by two types, the type on which I'm applying the lens, usually referred as `Whole`, and the type onto which the lens is focusing, called `Part`. Thus, a full generic representation of a lens can be given like the following:
 
 ```swift
-struct Company {
-	var name: String
-	var board: BoardOfDirectors
-}
-
-struct BoardOfDirectors {
-	var ceo: Employee
-	var cto: Employee
-	var cfo: Employee
-	var coo: Employee
-}
-
-struct Employee {
-	let name: String
-	let salary: Salary
-}
-
-struct Salary {
-	var amount: Double
-	var bonus: Double
+struct Lens<Whole,Part> {
+  let get: (Whole) -> Part
+  let set: (Part) -> (Whole) -> Whole
 }
 ``` 
 
-In our use case, we probably extracted an instance of `Company` from a repository, and because we want to change the CEO's bonus (let's halve it, shall we?), we could manually do this:
+A `Prism` is the same for coproducts. We can define a prism from `D` (an enum) to `F` (the associated type to one of its cases). What's a `get` in this case? It's a function that takes a `D` and *tries* to yield a `F`: I said "tries" because a `F` can only be retrieved if the `D` instance *is in the right case*, otherwise we can simply return `nil`. That's why the `get` for prisms is a `tryGet`, that returns a `Part?`. About the `set`, given a `F` we can completely reconstruct a `D` via the `case` function, so its more like an `inject`, in which we produce a *new* `D` without any knowledge of the previous one. That being said, a nice representation of `Prism` is the following:
 
 ```swift
-/// example 1
-
-var com = Repository.getCompany
-com.board.ceo.salary.bonus *= 0.5
-Repository.setCompany(com)
-```
-
-This seems perfectly fine, and it's made possible by the fact that every property is a `var`; it's also clear and readable: we can see at-a-glance that we are halving the CEO's bonus. Now we decide that we want to give the CTO a raise, let's say that they're going to earn an average between the CEO and the CFO. First, let's define an `average` function:
-
-```swift
-extension Double {
-	static func average(_ values: Double...) -> Double {
-		return values.reduce(0, +)/Double(values.count)
-	}
+struct Prism<Whole,Part> {
+  let tryGet: (Whole) -> Part?
+  let inject: (Part) -> Whole
 }
 ```
 
-Then, let's execute the required action:
+There are actually **many ways** to define lenses and prisms, and the code I showed defines a very simple representation that I find most useful in my Swift code. Maybe in future articles I'll explore different representations, but my intention is to give a pragmatic approach, based on what seems useful in day-to-day Swift code, and what I actually use in my own code.
+
+I'll spend a few more words on `Prism<Whole,Part>`, with a practical example. Suppose I have the following data structure:
 
 ```swift
-/// example 2
-
-var com = Repository.getCompany
-let ceoSalary = com.board.ceo.salary
-let cfoSalary = com.board.cfo.salary
-com.board.cto.salary.amount = Double.average(ceoSalary.amount,cfoSalary.amount)
-Repository.setCompany(com)
-```
-
-It seems *kind of* ok: it's not really clear what we're doing by just glancing at the code, because the logic is not clearly expressed, and it's not separated from the internal workings of the code. The fact that we need **a series of statements** in a certain order, and that we need to hold values in temporary constants to make the thing more readable are just **noise** that obfuscate the logic. Let's see a final example. We want to change the bonus of the CFO this way: we want to make sure than the bonus is not less than the 6% of their salary; if it is, set the bonus to 6% of the salary; if it's not, leave it alone.
-
-```swift
-/// example 3
-
-var com = Repository.getCompany
-let cfoAmount = com.board.cfo.salary.amount
-var cfoBonus = com.board.cfo.salary.bonus
-if cfoBonus/cfoAmount < 0.06 {
-	cfoBonus = cfoAmount*0.06
-}
-com.board.cfo.salary.bonus = cfoBonus
-Repository.setCompany(com)
-```
-
-Now the logic is mostly lost in the code workings for retrieval and setting, and we also need to create a temporary variable `cfoBonus` that will increase the probability of making mistakes. We would really like to separate the logic needed to *get* and *set* the needed properties, from the *business logic*, that is, the *rules* that we want to apply to our data. *Lenses* have exactly this purposes: they atomically express the *get* and *set* operations.
-
-## Using lenses to abstract `set` and `get` operations
-
-The reason why they're called "lenses" is that the basic intuition is the one of **focusing** on a particular part of a data structure: once we focused on that, we can retrieve it and change it with ease. Also, lenses are *composable*, which means that if a lens acts on a structure `A` by focusing on the subpart `B`, and another lens acts on a structure `B` by focusing on the subpart `C`, we can *join* them to create a lens that acts on a structure `A` by focusing on the sub-subpart `C`, which is of course great for nested data structures. And here lies the power of lenses: composition, to create more complex actions from simpler ones.
-
-I'm reporting the full implementation of lenses that I'm going to use here, please refer to the companion Gist for clearer code:
-
-```swift
-protocol LensType {
-	associatedtype WholeType
-	associatedtype PartType
-
-	var get: (WholeType) -> PartType { get }
-	var set: (PartType,WholeType) -> WholeType { get }
-
-	init(get: @escaping (WholeType) -> PartType, set: @escaping (PartType,WholeType) -> WholeType)
-}
-
-struct Lens<Whole,Part>: LensType {
-	typealias WholeType = Whole
-	typealias PartType = Part
-
-	let get: (Whole) -> Part /// get the "focused" part
-	let set: (Part,Whole) -> Whole /// set a new value for the "focused" part
-
-	init(get: @escaping (Whole) -> Part, set: @escaping (Part,Whole) -> Whole) {
-		self.get = get
-		self.set = set
-	}
-}
-
-extension LensType {
-	func over(_ transform: @escaping (PartType) -> PartType) -> (WholeType) -> WholeType {
-		return { whole in self.set(transform(self.get(whole)),whole) }
-	}
-
-	func join<Subpart, OtherLens: LensType>(_ other: OtherLens) -> Lens<WholeType,Subpart> where OtherLens.WholeType == PartType, OtherLens.PartType == Subpart {
-		return Lens<WholeType,Subpart>(
-			get: { other.get(self.get($0)) },
-			set: { (subpart: Subpart, whole: WholeType) -> WholeType in
-					self.set(other.set(subpart,self.get(whole)),whole)
-		})
-	}
-	
-	func zip<OtherPart, OtherLens: LensType>(_ other: OtherLens) -> Lens<WholeType,(PartType,OtherPart)> where OtherLens.WholeType == WholeType, OtherLens.PartType == OtherPart {
-		return Lens<WholeType,(PartType,OtherPart)>(
-			get: { (self.get($0),other.get($0)) },
-			set: { other.set($0.1,self.set($0.0,$1)) })
-	}
+enum ViewState<T> {
+  case empty
+  case processing(String)
+  case failed(Error)
+  case completed(T)
 }
 ```
 
-A `Lens` is really just a pair of functions:
+`ViewState<T>` represents the model for a view that can be in many states, depending on the progress of a particular process: for example, the process could fail, yielding an `Error`, or could complete successfully, with some generic `T` value. Let's define a `Prism` on `ViewState<T>`: because it has 4 cases, we can define 4 prisms. For example, for the `processing` case we can define a prism where the `Whole` is `ViewState<T>` (as for any prism defined on this data structure) and the part is `String`, i.e., the associated type to the `processing` case. The final type of this prism will then be `Prism<ViewState<T>,String>`. Notice that a prism defined on the `empty` case would be of type `Prism<ViewState<T>,()>`, because `()` (or `Void` in Swift) is the *implicit* associated type of that case.
 
-- a function to `get` a property from a data structure;
-- a function to `set` a new value for a property in a data structure, returning the modified structure.
+## From *View* to *Model*
 
-The power of lenses is mostly in:
+As many have probably noticed, the perfect use case for lenses and prisms is when we need to act on a tree-like data structure, where many parent-child relationships are established: for each parent-child pair we can define a lens or a prism, depending on the type of the parent (product or coproduct). As iOS developers (or mobile developers in general) we deal with one of these structures on a daily basis, and it's the *view hierarchy*. While we could define lenses directly on `UIView` and on its subclasses, I find it preferable to work with **view models**, that is, objects that represent views but are not view themselves. I'm not strictly talking about the [Model-View-ViewModel](https://en.wikipedia.org/wiki/Model–view–viewmodel) architectural pattern, in which the ViewModel could be a mutable class with identity and logic: I'm simply referring to using structs and enums to mediate the content of views, something I could refer to as *functional ViewModel*. A ViewModel like this is dumb, has no logic, only data, and is acted upon *from the outside* with functions, functions like the ones defined in lenses and prisms.
 
-- the `join` function, that composes two lenses with matching part/whole;
--  the `over` function, that modifies a property of a data structure based on the previous value, returning the new structure;
--   the `zip` function, that mixes together two lenses with the same whole part, so we can apply both at the same time, by retrieving/modifying two things together. 
-
-Names of functions are mostly arbitrary, and actually it's frequent to use custom operators for them, but I prefer methods. To rewrite the previous examples with lenses, we need to add some lenses to every `struct`: please refer to the companion Gist for the implementation. 
-
-For the first example, things are going to appear actually messier. Let's define a couple of lenses:
+Let's see an example:
 
 ```swift
-let onCEO = Company.lens.board.join(BoardOfDirectors.lens.ceo)
-let onSalaryAmount = Employee.lens.salary.join(Salary.lens.amount)
-```
+struct LoginPage {
+  var title: String
+  var credendials: CredentialBox
+  var buttonState: ViewState<Button>
+}
 
-We are going to reuse these a lot, and thanks to the very *lens abstraction* we can generically define objects that will somehow act on a certain part of a data structure. The *action* required in `example 1` is to halve the CEO's salary amount, something that we can easily express by combining lenses, without the need of a living variable instance of `Company`:
+struct CredentialBox {
+  var usernameField: TextField
+  var passwordField: TextField
+}
 
-```swift
-let action: (Company) -> Company = onCEO.join(onSalaryAmount).over { $0*0.5 }
-``` 
+struct TextField {
+  var text: String
+  var placeholder: String?
+  var secureText: Bool
+}
 
-Notice that I specified the **type** of `action`: it's a function that transforms a `Company`. In fact, pretty much everything we did in the previous examples was to take the current company, put it into a `var`, that is, a mutable reference, modify something, and then store the company again. We can abstract the whole process with the following:
-
-```swift
-func updateCompany(with action: (Company) -> Company) {
-	Repository.setCompany(action(Repository.getCompany))
+struct Button {
+  var title: String
+  var enabled: Bool
 }
 ```
 
-The `update` function takes a `(Company) -> Company` function as an input, and it's very easy to generate those with lenses, no mutable references needed. The first example then becomes:
+`LoginPage` is a model for a login page (which is probably going to be a `UIViewController` in a iOS app), with all its parts: it includes a `title` that's simply a `String`, a `CredentialBox` struct represented by two `TextField` that are themselves structs, and a `buttonState` that's represented by a `ViewState<Button>` where `Button` is another struct. Everything here is `var` because any on these models can be constructed with any value, and any property can change in any way at any time. But, because we're dealing with value types, mutating this `LoginPage` actually means creating a new reference, and that's only going to be possible if we assign an instance of `LoginPage` to a variable, annotated with `var`.
+
+Adding lenses to these structs is simple, and there are many ways to do that. One possible way is to extend each struct with an *nested* type called `lens` that's going to act as *namespace*, and then defining all the lenses as `static` properties of this `lens`, like in the following example:
 
 ```swift
-/// example 1 with lenses
-
-updateCompany(with: onCEO.join(onSalaryAmount).over { $0*0.5 })
-```
-
-For the second example, let's define another couple of completely reusable lenses:
-
-```swift
-let onCTO = Company.lens.board.join(BoardOfDirectors.lens.cto)
-let onCFO = Company.lens.board.join(BoardOfDirectors.lens.cfo)
-```
-
-With these, the second example becomes:
-
-```swift
-/// example 2 with lenses
-
-updateCompany {
-	onCTO.join(onSalaryAmount)
-		.set(Double.average(
-			onCEO.join(onSalaryAmount).get($0),
-			onCFO.join(onSalaryAmount).get($0)),
-				 $0)
+extension CredentialBox {
+  enum lens {
+    static let usernameField = Lens<CredentialBox,TextField>.init(
+      get: { $0.usernameField },
+      set: { part in
+        { whole in
+          var m = whole
+          m.usernameField = part
+          return m
+        }
+    })
+  }
 }
 ```
 
-This looks messier on first sight, but the problem is really one of familiarity, because here, without creating temporary variables, we're pretty clearly defining the logic:
+As you can see, `CredentialBox.lens.usernameField` is a lens from `CredentialBox` to `TextField`, and because it's a static property, only an instance of this lens is going to be alive in the entire lifecycle of the application: it's simply something always available, that can be referred when needed.
 
-- `updateCompany`: we're going to update a `Company`;
-- `onCTO.join(onSalaryAmount)`: by acting on CTO's salary amount;
-- `.set(Double.average`: it's going to be an average;
-- `onCEO.join(onSalaryAmount).get` and `onCFO.join(onSalaryAmount).get`: of the salary amount of the CEO and CFO.
+The implementation is trivial, there's really only one **sane** way to write this: the `get` function simply gets the value from the `usernameField` property, while the `set` grabs a `var` reference to the `whole` that's passed in, mutates it and then returns it: we can do this because `usernameField` is defined as `var` in `CredentialBox`. Notice that the `set` function is a [*higher-order function*](https://en.wikipedia.org/wiki/Higher-order_function), because it takes a value and returns *a new function*: we generally want this kind of thing for the `set` part of a lens, so that we can *prepare* a function that will transform the `Whole` with a new `Part`.
 
-I'd say that the logic is clearly expressed if you're familiar with the constructs, and in general with working with **higher-order functions**, but the case still doesn't seem to be particularly on point.
-
-Let's see the third example:
+The story is similar for `Prism`. For example, we might want to the define the `Prism` for the `processing` case in `ViewState<T>`:
 
 ```swift
-/// example 3 with lenses
-
-updateCompany(with: onCFO.join(onSalaryAmount)
-	.zip(onCFO.join(onSalaryBonus))
-	.over { (amount,bonus) in
-		if bonus/amount < 0.06 {
-				return (amount,amount*0.06)
-			} else {
-				return (amount,bonus)
-			}
-})
-```
-
-Something's happened: we are mixing together actions from `onCFO.join(onSalaryAmount)` and `onCFO.join(onSalaryBonus)`, because the logic needs both, and in the `over` method we are pretty clearly expressing the logic, away from boilerplate and code machinery. I think we can pretty clearly see here that by putting the logic needed to *access* the properties of a data structure at any level of depth away from the main business logic, we can write more readable, maintainable and safe code: actually, safety is given mostly because the examples with lenses feature *a single expression* that's type-checked, and not multiple temporary variable and/or multiple statements that must resolve in a certain order.
-
-But still, from a pragmatic standpoint, this seems decent but not great. I'm probably not making a strong case for lenses in Swift, and that's mostly thanks to the value semantics of structs. But notice that if our structs had immutable properties, the code in the regular examples would change pretty radically, and in a bad way, while the code with lenses would be **exactly the same**: lenses don't care about immutability, because the set/get part is abstracted away, and the only thing that we need to care about when working with them is the actual business logic. Just try it yourself by copying the Gist in a playground: switch some properties to `let`, and watch the imperative world burn. Of course we'd face the same problems with classes instead of structs: in working with classes, it would be better to have `let` properties to make the classes immutable, and in that case lenses would really save the day.
-
-Finally, I think there's great value in being able to **express a simple action with a function**, and more complex actions by composing those simple functions: that's one of the main reasons why I develop software in a functional style. But I can understand at least a bit of diffidence, if not complete refusal, towards a concept like "lens" that at first seems so abstract and pointlessly hard to understand. Still, I hope I was able to make a case for using lenses for your data structures.
-
-## Traversing a loosely typed data structure
-
-A problem arises when we're working with a data structure that's not completely defined in terms of **types**. For example, when we **deserialize** some JSON data with `JSONSerialization`, we get an object of type `Any`: usually a server will output a dictionary, that is, a collection of key-value pairs, where keys are strings, and values are whatever the documentation tells. But everyone that's ever worked with JSON knows that in parsing a JSON is not a good idea to just **assume things** and force-unwrap everything: in fact, popular Swift libraries like [Argo](https://github.com/thoughtbot/Argo) make possible to parse JSON in a type-safe and error-aware way.
-
-Now, what happens when we apply lenses to a `[String:Any]` dictionary? For example, we've been told that there's a key `user`, at which there's another `[String:Any]` containing the various properties of a user, like the name, a `String` at the key `name`. A lens could seem a good strategy to retrieve the name, or to generate a new structure with a different name et cetera, but what are the "whole" and the "part" here? Well:
-
-- in the first case, both the whole and the part are `[String:Any]`, because we have a dictionary and we expect another dictionary at the key `user`;
-- in the second case the whole is again `[String:Any]`, but the part is a `String`.
-
-Unfortunately, if we try to create a generic lens for this use case we end up with the following:
-
-```swift
-typealias AnyDict = [String:Any]
-
-func anyDictLens<Part>(at key: String, as: Part) -> Lens<AnyDict,Part> {
-	return Lens<AnyDict,Part>(
-		get: { (whole: AnyDict) -> Part in whole[key] as! Part },
-		set: { (part: Part, whole: AnyDict) -> AnyDict in
-			var m_dict = whole
-			m_dict[key] = part
-			return m_dict
-	})
-}
-```
-
-In the `get` function we need to force-unwrap the result of `whole[key]`, which is an `Optional<Any>`. We can see that, actually, a lens acting on a `AnyDict` has to be a lens that focuses on an `Optional`. In general, there's no need for a lens to reflect exactly the same types of the structure it's applied upon: in this particular case the part on which the lens focuses is really and `Optional<Part>`. Thus, the correct code is the following:
-
-```swift
-func anyDictLens<Part>(at key: String, as: Part) -> Lens<AnyDict,Part?> {
-	return Lens<AnyDict,Part?>(
-		get: { (whole: AnyDict) -> Part? in whole[key] as? Part },
-		set: { (part: Part?, whole: AnyDict) -> AnyDict in
-			var m_dict = whole
-			m_dict[key] = part
-			return m_dict
-	})
-}
-```
-
-Now we can define a dictionary and a couple of lenses:
-
-```swift
-let dict: AnyDict = ["user" : ["name" : "Mr. Creosote"]]
-
-let lens1 = anyDictLens(at: "user", as: AnyDict.self)
-let lens2 = anyDictLens(at: "name", as: String.self)
-```
-
-Notice how we use the keys to define specific lenses, instead of the properties of a struct. This seems fine, until we try to join those lenses to focus at the desired depth of the dictionary:
-
-```swift
-let nameLens = lens1.join(lens2) /// this won't compile
-```
-
-To join two lenses, the `Part` of the first has to be the same as the `Whole` of the second, and **there's no match here**: the part of the first is `Optional<AnyDict>`, while the whole of the second is just `AnyDict`. We could "cheat" by defining a new `tryJoin` function:
-
-```swift
-func tryJoin<A,B,C>(_ left: Lens<A,B?>, _ right: Lens<B,C?>) -> Lens<A,C?>
-```
-
-But this is ugly: we cannot define this as a method, and we cannot simply compose `get` and `set` like we did with `join`, `over` and `zip` (because we need to unwrap the optionals). This doesn't seem like a proper pattern for a lens. The point here is the following: when we apply lenses on a loosely typed data structure, the focused parts must be considered *either* some object of some type, *or nothing*, in the case where we don't find what we're searching for. That's really the specialty of a *Prism*.
-
-## Prisms in Swift
-
-Let's start with **the basic intuition** behind a prism. The idea behind a lens is the one of *focusing*: I *forget* the whole data structure and only act on a part of it. The prism, instead, is based on the concept of *dispersion* (if you're interested please refer to the [Wikipedia](https://en.wikipedia.org/wiki/Prism) page): I *separate* a data structure in *possible* subparts, and either retrieve a subpart if it's there, or recreate the structure with just that part. Prisms are useful when we're dealing with data structures that are made of one possible part chosen among any, that is, a *sum type*: for example, `Optional` is a sum type, because an optional instance either contains something or nothing, it's one of the two.
-
-The main methods of a prism are:
-
-- `tryGet`, that gets the possible subpart if it's there, or `nil` (thus, it returns an `Optional`);
-- `inject`, that generates the full structure with a specific subpart.
-
-We can see the relation with Lens' `get` and `set`. Here's a possible implementation, complete again with `tryOver`, `join` as `zip`:
-
-```swift
-protocol PrismType {
-	associatedtype WholeType
-	associatedtype PartType
-
-	var tryGet: (WholeType) -> PartType? { get }
-	var inject: (PartType) -> WholeType { get }
-
-	init(tryGet: @escaping (WholeType) -> PartType?, inject: @escaping (PartType) -> WholeType)
-}
-
-struct Prism<Whole,Part>: PrismType {
-	typealias WholeType = Whole
-	typealias PartType = Part
-
-	let tryGet: (Whole) -> Part? /// get the part, if possible
-	let inject: (Part) -> Whole /// changes the value to reflect the part that's injected in
-
-	init(tryGet: @escaping (Whole) -> Part?, inject: @escaping (Part) -> Whole) {
-		self.tryGet = tryGet
-		self.inject = inject
-	}
-}
-
-extension PrismType {
-	func tryOver(_ transform: @escaping (PartType) -> PartType) -> (WholeType) -> WholeType? {
-		return { whole in self.tryGet(whole).map { self.inject(transform($0)) } }
-	}
-
-	func join<OtherPart, OtherPrism>(_ other: OtherPrism) -> Prism<WholeType,OtherPart> where OtherPrism: PrismType, OtherPrism.WholeType == PartType, OtherPrism.PartType == OtherPart  {
-		return Prism<WholeType,OtherPart>(
-			tryGet: { self.tryGet($0).flatMap(other.tryGet) },
-			inject: { self.inject(other.inject($0)) })
-	}
-
-	func zip<OtherWhole, OtherPrism>(_ other: OtherPrism) -> Prism<(WholeType,OtherWhole),PartType> where OtherPrism: PrismType, OtherPrism.PartType == PartType, OtherPrism.WholeType == OtherWhole {
-		return Prism<(WholeType,OtherWhole),PartType>(
-			tryGet: { (whole,otherWhole) in
-				self.tryGet(whole) ?? other.tryGet(otherWhole)
-		},
-			inject: { part in
-				(self.inject(part),other.inject(part))
-		})
-	}
-}
-```
-
-At this point we can redefine our `anyDict` function in terms of prisms, and generate prisms to use in our dictionary:
-
-```swift
-func anyDictPrism<Part>(at key: String, as: Part.Type) -> Prism<AnyDict,Part> {
-	return Prism<AnyDict,Part>(
-		tryGet: { $0[key] as? Part },
-		inject: { [key:$0] })
-}
-
-let prism1 = anyDictPrism(at: "user", as: AnyDict.self)
-let prism2 = anyDictPrism(at: "name", as: String.self)
-
-let namePrism = prism1.join(prism2)
-```
-
-Now `namePrism` can operate on a dictionary like the one defined before:
-
-```swift
-let name = namePrism.tryGet(dict) /// it's Mr. Creosote!
-```
-
-But a prism can also handle failing cases, like the following:
-
-```swift
-let prism3 = anyDictPrism(at: "weight", as: String.self)
-
-let weightPrism = prism1.join(prism3)
-let weight = weightPrism.tryGet(dict) /// this is nil
-```
-
-That's a lot of code to digest, let's elaborate a little.
-
-The problem with traversing a loosely typed data structure is that, for every `get` call we need to check the retrieved object's type, if there's an object at all: that's going to be **a lot of nested "ifs"**. But we frequently deal with dictionaries, arrays, hashmaps et cetera, with loose type annotations, even in a strongly typed language like Swift: that's because we deal with serialization/deserialization of objects (for example, when we parse the output of a server after a HTTP request), and there's no way to precisely annotate the type of a deserialized object. In fact, `JSONSerialization` works with objects of type `Any` and, idiomatically or not, when working with JSON we need to **safely unwrap** objects if we don't want to incur in possible **crashes**. A prism incapsulates this very concept: traversing a data structure in which at every step we can find a number of possibilities.
-
-Other than `tryGet` there's the inverse operation, `inject`, which builds the whole data structure with the *path* defined by the prism. In our case, we can build a dictionary where there actually is a value for the `weight` key:
-
-```swift
-let otherDict = weightPrism.inject("200 kg") /// this is ["user": ["weight": "200 kg"]]
-```
-
-Notice that this doesn't depend on `dict`: it's an entirely new dictionary, but the structure of the data is the same (because `weightPrism` still derives from `prism1`). This seems less convenient than the `set` function of a lens, because `set` actually modified an existing structure, but the semantics of a prism is different: two different prisms acting on the same structure could generate different results, so to end up with a single `Whole` we need a way to *merge* them.
-
-To not leave this thread hanging, let's define an `override` function that acts on 2 `AnyDict` and merges them, giving priority to the second in case of matching keys (thus, *override*):
-
-```swift
-public func dictOverride(_ first: AnyDict, _ second: AnyDict) -> AnyDict {
-	var m_dict = first
-	for (key,value) in second {
-		if let current = m_dict[key] {
-			if let firstAnyDict = current as? AnyDict, let secondAnyDict = value as? AnyDict {
-				m_dict[key] = dictOverride(firstAnyDict, secondAnyDict)
-			} else {
-				m_dict[key] = value
-			}
-		} else {
-			m_dict[key] = value
-		}
-	}
-	return m_dict
-}
-```
-
-This could be useful when working with types like `[String:Any]`, for example in this case:
-
-```swift
-let fullDict = dictOverride(dict, otherDict) /// this is ["user": ["name": "Mr. Creosote", "weight": "200 kg"]]
-```
-
-But this has nothing to do with the semantics of a prism: a prism will simply try and follow a particular line in a data structure, or in other words, *traverse* the structure with a certain logic.
-
-## Prisms composition and the `zip` function
-
-This topic deserves it's own section because it's probably the most important one. As with lenses, the true power of prisms comes from the fact that they are composable, i.e., multiple, simple prisms can be combined to obtain more complex ones. For example, the `join` function can be used to create prisms that go *deeper* into a data structure. In the case of dictionaries we could imagine prisms that **explore** the dictionary until they find the requested object. Let's assume, for example, that we're asking a server to provide image urls for products, and that each product is (partially) represented like this:
-
-```JSON
-{
-  "info" : {
-    "image" : {
-      "icon_urls" : [
-        "https://image.org/1.png",
-        "https://image.org/2.png",
-        "https://image.org/3.png"
-      ]
+extension ViewState {
+  enum prism {
+    static var processing: Prism<ViewState,String> {
+      return Prism<ViewState,String>.init(
+        tryGet: {
+          guard case .processing(let message) = $0 else {
+            return nil
+          }
+          return message
+        },
+        inject: { .processing($0) })
     }
   }
 }
 ```
 
-In Swift, considering different possibilities:
+Unfortunately, with this strategy, we cannot assign the `Prism` to a *stored* static property (because `ViewState` is a generic type): not a big deal, we'll use a computed property (still static). Again, the implementation is trivial, there's only one sane way to write this.
+
+## Let's do this
+
+Suppose we want to modify a current instance of `LoginPage`. A new set of values is represented by the following tuple:
 
 ```swift
-let jsonExample1 = [
-	"info" : [
-		"image" : [
-			"icon_urls" : [
-				"https://image.org/1.png",
-				"https://image.org/2.png",
-				"https://image.org/3.png"]]]]
-				
-let jsonExample2 = [
-	"info" : [
-		"image" : [
-			"icon_urls" : [String]()]]]
-
-let jsonExample3 = [
-	"info" : [
-		"image" : [
-			"WRONG_KEY" : [
-				"https://image.org/1.png",
-				"https://image.org/2.png",
-				"https://image.org/3.png"]]]]
+let initialState = (
+  title: "Welcome back!",
+  username: savedUsername,
+  buttonState: ViewState<Button>.completed(Button.init(
+    title: "Login",
+    enabled: false)))
 ```
 
-Notice the nested structure (we're omitting everything else and just focusing on the image urls). Suppose we just need the first url (if any) from the urls array; then we can define a prism like the following:
+`initialState` contains a bunch of initial settings for the `LoginPage`: `savedUsername` might be the username string stored in the `UserDefaults`.
+
+Because our `LoginPage` is mutable - in the sense we discussed earlier for value types, that is, not really mutable but it can be manipulated like it was - we can simply do this:
 
 ```swift
-let infoDictPrism = anyDictPrism(at: "info", as: AnyDict.self)
-let imageDictPrism = anyDictPrism(at: "image", as: AnyDict.self)
-let iconURLsPrism = anyDictPrism(at: "icon_urls", as: [String].self)
-let firstURLPrism = Prism<[String],String>(
-	tryGet: { $0.first },
-	inject: { [$0] })
-let imageURLPrism1 = infoDictPrism
-	.join(imageDictPrism)
-	.join(iconURLsPrism)
-	.join(firstURLPrism)
+var m_newModel = oldModel
+m_newModel.title = initialState.title
+m_newModel.credendials.usernameField.text = initialState.username
+m_newModel.buttonState = initialState.buttonState
 ```
 
-Now we can `tryGet` the first URL with the following:
+The problem with this approach, which is of course the most basic one for `var` instances, is that we're not clearly representing the relationship between the `LoginPage` and its parts: we're directly accessing the properties of the model, and in the case of the username text we need to call 3-levels deep of properties (that is, `.credendials.usernameField.text`). It would be really useful if we had objects that *encapsulate* the access to properties at any level, for example if we were able to encapsulate the access to the username field text, that is, the *relationship* with the `LoginPage`, such that if something changes in the future for this chain of relationships, nothing is going to break in the place when we use the object to manipulate the property itself.
+
+A `Lens` does exactly this: *encapsulates* the relationship between a data structure and one of its parts. But for now we only defined lenses from a type to its direct properties. To represent with a lens something like `.credendials.usernameField.text` we need to **compose** lenses with matching `Part/Whole` parameters. What I mean is something like this:
 
 ```swift
-let firstURL = imageURLPrism1.tryGet(jsonExample1) /// this is "https://image.org/1.png"
-
-let noFirstURL = imageURLPrism1.tryGet(jsonExample2) /// this is nil
-
-let stillNoFirstURL = imageURLPrism1.tryGet(jsonExample3) /// this is nil
+Lens<A,B> + Lens<B,C> = Lens<A,C>
 ```
 
-Our `imageURLPrism1` safely traverses the dictionary and extracts the desired information, if possible.
-
-Now imagine a JSON example like this:
+If a lens' `Part` is the same as another lens' `Whole` we can *chain* them together, generating a single lens that goes *one level deeper* in the data structure represented by the first lens' `Whole`. It turns out that we can always do this in a completely generic way, we only need the types to match correctly. In fact, we can extend both `Lens` and `Prism` with a `compose` function that will take another lens/prism for which the `Whole` is the same as the first lens/prism `Part`, and return a new lens/prism that will cover the extended range of types:
 
 ```swift
-let jsonExample4 = [
-	"info" : [
-		"main_image_icon_url" : "https://image.org/3.png",
-		"image" : [
-			"icon_urls" : [
-				"https://image.org/1.png",
-				"https://image.org/2.png",
-				"https://image.org/3.png"]]]]
+extension Lens {
+  func compose<Subpart>(_ other: Lens<Part,Subpart>) -> Lens<Whole,Subpart> {
+    return Lens<Whole,Subpart>(
+      get: { other.get(self.get($0)) },
+      set: { (subpart: Subpart) in
+        { (whole: Whole) -> Whole in
+          self.set(other.set(subpart)(self.get(whole)))(whole)
+        }
+    })
+  }
+}
 ```
 
-The logic here is the following: for the icon image, search for the "main_image_icon_url" key: if it's there and it's a `String`, use that string as url; if it's not, fall back to the "icon_urls" array and get the first element. There are 2 possible paths now to get the same information, and that would require 2 prisms, but those should not be joined: *join* means *concatenate*, that is, apply the prisms in series, but what we want to do is applying them **in parallel**. That's what the `zip` function is about. Notice the signature (I omitted the "where" part):
+The implementation seems complex, in particular the line `self.set(other.set(subpart)(self.get(whole)))(whole)`, but actually there's really only one sane way to write this: the types really guide the implementation here, and if it compiles it's almost certainly going to work. Actually, the only other option for implementing the `set` function so that Swift compiles is by naively returning the `whole` input unchanged, which is of course wrong.
+
+We can do the same for `Prism`:
 
 ```swift
-func zip<OtherWhole, OtherPrism>(_ other: OtherPrism) -> Prism<(WholeType,OtherWhole),PartType>
+Prism<A,B> + Prism<B,C> = Prism<A,C>
+
+extension Prism {
+  func compose<Subpart>(_ other: Prism<Part,Subpart>) -> Prism<Whole,Subpart> {
+    return Prism<Whole,Subpart>(
+      tryGet: { self.tryGet($0).flatMap(other.tryGet) },
+      inject: { self.inject(other.inject($0)) })
+  }
+}
 ```
 
-The returned prism applies the two original prisms to 2 different "whole", but considers the same "part": even if the data structure is going the be the same for us, this is what we want, because the "part" is the same, it's just that two different prisms in general will *decompose* and *recompose* 2 different data structures, but the *isolated* component has to be the same. Let's define the new `imageURLPrism2`:
+I actually prefer to use an operator for composing lenses and prisms this way, the `..` operator, which can be read as *and then*: `A..B` would be read as *A, and then, B*.
 
 ```swift
-let imageURLPrism2 = infoDictPrism.join(anyDictPrism(at: "main_image_icon_url", as: String.self))
+precedencegroup LeftCompositionPrecedence {
+  associativity: left
+}
+
+infix operator .. : LeftCompositionPrecedence
+
+extension Lens {
+  static func .. <Subpart> (lhs: Lens<Whole,Part>, rhs: Lens<Part,Subpart>) -> Lens<Whole,Subpart> {
+    return lhs.compose(rhs)
+  }
+}
+
+extension Prism {
+  static func .. <Subpart> (lhs: Prism<Whole,Part>, rhs: Prism<Part,Subpart>) -> Prism<Whole,Subpart> {
+    return lhs.compose(rhs)
+  }
+}
 ```
 
-Finally, let's zip the prisms and apply them to `jsonExample4` and `jsonExample1`:
+ Now we can simply grab some lenses:
 
 ```swift
-let finalURL1 = imageURLPrism2.zip(imageURLPrism1).tryGet(jsonExample4,jsonExample4) /// this is "https://image.org/3.png"
-let finalURL2 = imageURLPrism2.zip(imageURLPrism1).tryGet(jsonExample1,jsonExample1) /// this is "https://image.org/1.png"
+let titleLens = LoginPage.lens.title
 
+let usernameTextLens = LoginPage.lens.credentials..CredentialBox.lens.usernameField..TextField.lens.text
+    
+let buttonStateLens = LoginPage.lens.buttonState
 ```
 
-We got `"https://image.org/3.png"` as `finalURL1` because the first prism takes priority over the second one, and `finalURL2` is going to be `"https://image.org/1.png"` simply because there's no `"main_image_icon_url"`.
+A very ugly way to use these lenses to modify our original model would be to apply their `set` function over and over again on `oldModel`: because `set`, applied to a `Part`, returns a function that transforms the `Whole`, we can generate these `(Whole) -> Whole` functions and apply them one after the other to the `oldModel`. The resulting code is nothing to be proud of:
+
+```swift
+let newModel = titleLens.set(initialState.title)(usernameTextLens.set(initialState.username)(buttonStateLens.set(initialState.buttonState)(oldModel)))
+```
+
+It would useful if we were able to combine again these lenses, but in a different way: these lenses all share the same `Whole`, but focus on different `Part`s. The composition we need is something like this:
+
+```swift
+Lens<A,B1> + Lens<A,B2> = Lens<A,(B1,B2)>
+
+Prism<A,B1> + Prism<A,B2> = Prism<A,Either<B1,B2>>
+```
+
+The resulting lens will focus on **both** `B1` and `B2`, while the resulting prism will focus on **either** `B1` or `B2`; to represent this *exclusive or* relationship for `Prism` I used a very simple `Either` enum:
+
+```swift
+enum Either<A,B> {
+  case left(A)
+  case right(B)
+}
+```
+
+Can we compose lenses and prims generically in this way? Of course we can. I like to call this function `zip` for both `Lens` and `Prism`:
+
+```swift
+extension Lens {
+  static func zip<Part1,Part2>(
+    _ a: Lens<Whole,Part1>,
+    _ b: Lens<Whole,Part2>)
+    -> Lens<Whole,(Part1,Part2)>
+    where Part == (Part1,Part2)
+  {
+    return Lens<Whole,(Part1,Part2)>(
+      get: { (a.get($0),b.get($0)) },
+      set: { parts in { whole in b.set(parts.1)(a.set(parts.0)(whole)) } })
+  }
+
+  static func zip<A,B,C>(_ a: Lens<Whole,A>, _ b: Lens<Whole,B>, _ c: Lens<Whole,C>) -> Lens<Whole,(A,B,C)> where Part == (A,B,C) {
+    return Lens<Whole,(A,B,C)>(
+      get: { (a.get($0),b.get($0),c.get($0)) },
+      set: { parts in { whole in c.set(parts.2)(b.set(parts.1)(a.set(parts.0)(whole))) } })
+  }
+}
+
+extension Prism {
+  static func zip<Part1,Part2>(
+    _ a: Prism<Whole,Part1>,
+    _ b: Prism<Whole,Part2>)
+    -> Prism<Whole,Either<Part1,Part2>>
+    where Part == Either<Part1,Part2>
+  {
+    return Prism<Whole,Either<Part1,Part2>>(
+      tryGet: { a.tryGet($0).map(Either.left) ?? b.tryGet($0).map(Either.right) },
+      inject: { part in
+        switch part {
+        case .left(let value):
+          return a.inject(value)
+        case .right(let value):
+          return b.inject(value)
+        }
+    })
+  }
+}
+```
+
+I also gave a definition for `zip` and 3 lenses (of course it can be done for any number of lenses), because this is the one we're going to use in our example. We can finally define our `initialStateLens`:
+
+```swift
+let initialStateLens = Lens.zip(
+  titleLens,
+  usernameTextLens,
+  buttonStateLens)
+	
+let newModel = initialStateLens.set(initialState)(oldModel)
+```
+
+`initialStateLens` encapsulates the entirety of the relationships between data types that we need to apply to the `oldModel` to get the new one.
+
+What about prisms? Prisms are for enums, so in our example we're probably going to need them when working with the button state. Suppose for example that we're in the `processing` state, so we're currently showing a message to the user (like "Please wait"). We'd like to modify the `LoginPage` by setting a new message as time passes, following the logic expressed by the following function:
+
+```swift
+func advanceProcessingMessage(_ previous: String) -> String {
+  switch previous {
+  case "":
+    return "Please wait"
+  case "Please wait":
+    return "Almost there"
+  case "Almost there":
+    return "ALMOST THERE"
+  default:
+    return previous + "!"
+	}
+}
+```
+
+This is just a pure function, expressing a simple, isolated piece of logic. But this is not a pure `set`: it actually *depends on the previous value*. Both lens' `set` and prism's `inject` don't give access to the previous value, but only allow  to modify a data structure with a brand new value. We need some kind of `modify` function (sometimes called `over`) that instead of taking a new `Part` to yield a transformation of the `Whole`, takes a *transformation of the `Part`*, thus, a function of type `(Part) -> Part`. Can we write this `modify` function in a completely generic way? Yep:
+
+```swift
+extension Lens {
+  func modify(_ transform: @escaping (Part) -> Part) -> (Whole) -> Whole {
+    return { whole in self.set(transform(self.get(whole)))(whole) }
+	}
+}
+
+extension Prism {
+  func tryModify(_ transform: @escaping (Part) -> Part) -> (Whole) -> Whole {
+    return { whole in self.tryGet(whole).map { self.inject(transform($0)) } ?? whole }
+	}
+}
+```
+
+Notice that, for `Prism` is `tryModify`: this is because it will only modify an instance of an enum if it's in the right case; if it's not, the resulting `(Whole) -> Whole` function will be an *identity*, i.e., a function that does nothing on the input, and simply returns it.
+
+Now, we have a lens from `LoginPage` to `ViewState<Button>`, and a prism from `ViewState<Button>` to `String`: can we compose them? Because composition has been the main point here from the very start of the article: combining small, simple things to form more complex but more useful things. Unfortunately there's really no easy way to combine a lens and a prism, at least considering the representation we gave for them. Luckily, we really don't care, because under the hood we're simply dealing with [*pure functions*](https://en.wikipedia.org/wiki/Pure_function), that compose if the types they act upon compose. By composing functions I mean something like this:
+
+```swift
+(A -> B) + (B -> C) = (A -> C)
+```
+
+This kind of composition can always be done, no matter what `A`, `B` and `C` are, and will always produce something meaningful if the functions involved are *pure*, which means that they have no side-effects, and that for the same input they'll always return the same output. A classic way of composing functions is by using a *dot* operator `•`, defined like the following:
+
+```swift
+infix operator •
+
+func • <A,B,C> (
+  _ left: @escaping (B) -> C,
+  _ right: @escaping (A) -> B)
+  -> (A) -> C
+{
+  return { left(right($0)) }
+}
+```
+
+The operator will simply apply both functions to a certain argument, one after the other. Now that we have a way to easily compose functions, we can generate a function that will modify the entire login page by applying a modification of the message for the processing state:
+
+```swift
+let buttonStateLens = LoginPage.lens.buttonState
+let processingPrism = ViewState<Button>.prism.processing
+
+let onProcessing = buttonStateLens.over • processingPrism.tryOver
+```
+
+From a completely generic standpoint, we're obtaining the `onProcessing` function with a composition like the following:
+
+```swift
+(B -> B) -> (A -> A) • (C -> C) -> (B -> B) = (C -> C) -> (A -> A)
+```
+
+Or, by using the actual types:
+
+```swift
+(ViewState<Button> -> ViewState<Button>) -> (LoginPage -> LoginPage) • (String -> String) -> (ViewState<Button> -> ViewState<Button>) = (String -> String) -> (LoginPage -> LoginPage)
+```
+
+Thus, the result is a function of type `(String -> String) -> (LoginPage -> LoginPage)`, that is, a higher-order function that takes a function that modifies a `String` (our processing message) and returns a function that modifies the entire `LoginPage`: in a way, this function takes a transformation of a small subpart of the data structure, and *lifts* it into a transformation of the whole structure.
+
+Finally, we can apply our `onProcessing` function like the following:
+
+```swift
+let newModel = onProcessing(advanceProcessingMessage)(oldModel)
+```
+
+## It's all nice and well, but...
+
+Up to this point we've been working mostly with *types*: words like *lens*, *prism*, *zip*, *tryModify* et cetera, are really just *conventions* for expressing what is really expressed by the types involved, in particular by the types of the functions that we composed and applied to our data structures. Types here are the only interface that we used to combine together the various pieces, and if types don't change, nothing *should* break. Unfortunately, types might be not enough.
+
+If I give you a lens, what I'm really giving you is functions based on a pair of types, a `Whole` and a `Part`: but just the interface doesn't make sure that the lens is going to work as intended (for example, that it's actually going to modify the data structure as we'd expect). How can we be sure that a lens or a prism behave properly? The answer is **LAWS**.
+
+As programmers we don't frequently talk about what *laws* or *axioms* our code is supposed to respect. **But we really should**. In fact, a discussion about laws is always needed when we're building a large system from small pieces, because we need to **trust** the pieces: we wouldn't be able to reason about code at all if we weren't able to assert some *properties* on our pieces. And actually, when we write **tests** we're really asserting that certain invariants are going to hold: for example, that a function called with a specific input will always return a specific output. But the problem with tests is that, usually, the underlying axioms that we're asserting are **implicit** in the tests, meaning that we're not really defining them. A nasty consequence of this is that we could end up writing tests that are ineffective (because we're not really testing against all the laws) or redundant (because a certain law is already made sure by another test). Let's define this axioms explicitly for lenses and prisms.
+
+For a very well-behaved `Lens` we need to prove 3 laws:
+
+- `getSet`: if I `get` a `B` from a data structure `A`, and then I `set` it back, `A` is not going to change;
+- `setGet`: if I `set` a `B` into a data structure `A` and then I `get` it back, the retrieved `B` must be equal to the initial one;
+- `setSet`: `set` is *idempotent*, meaning that if I `set` a `B` into an `A` multiple times, it's going to be exactly as if I `set` it just once.
+
+A well-behaved `Prism` has similar laws, that basically state that a full instance of the `Whole` is *completely defined* by each and everyone of its `Part`s:
+
+- `tryGetInject`: if I'm able to `tryGet` a `B` from an `A`, `inject`ing it back yields *exactly* the same `A`;
+- `injectTryGet`: if I construct an `A` by injecting a `B`, I must be able to `tryGet` exactly the same `B`.
+
+Once we have these laws defined, we can test lenses and prisms by asserting that the laws hold *for any possible* `Whole` and `Part`. I like to implement these kind of assertions as functions that return `true` or `false`, defined in a `Law` namespace, like the following:
+
+```swift
+struct LensLaw {
+  static func setGet<Whole, Part>(
+    lens: Lens<Whole,Part>,
+    whole: Whole,
+    part: Part)
+    -> Bool where Part: Equatable
+  {
+    return lens.get(lens.set(part)(whole)) == part
+  }
+}
+```
+
+This `LensLaw.setGet` function takes a `Lens<Whole,Part>` as argument, along with a `Whole` and a `Part`, and returns a `Bool` simply by equating the retrieved part to the initial part (in fact, `Part` must be `Equatable` for the law to be asserted). Calling this function with a certain `Whole` and `Part` will **only** prove that the lens behaves for those specific instances. What we want to do instead is to call this function with **many random instances** of `Whole` and `Part`, and then check if the function always returns `true`. This procedure is usually called *property-based testing*, and can be performed with libraries like [SwiftCheck](https://github.com/typelift/SwiftCheck).
+
+For example, using SwiftCheck we could write a test case like the following:
+
+```swift
+func testLensBehaves() {
+  let lens = Whole.lens.someProperty
+  property("Whole.lens.someProperty respects the setGet law") <- forAll { (whole: Whole, part: Part) in
+    lens.get(lens.set(part)(whole)) == part
+  }
+}
+```
+
+SwiftCheck is going to call the closure passed to `property` many times, with many different *random* values of `whole` and `part` (the types must conform to certain protocols, please refer to SwiftCheck documentation for the details), and the test will pass only if the closure returns `true` at each call.
+
+## As always, boilerplate
+
+Many of you might have noticed that the code for implementing lenses and prisms for our types is basically *boilerplate*: it has always the same structure, with only the names of properties and types changing. This has two implications:
+
+- we don't really need to test the code for *trivial* lenses and prisms, that is, lenses and prisms that are defined for properties and cases;
+- we can automatically **generate code** with tools like [Sourcery](https://github.com/krzysztofzablocki/Sourcery).
+
+For lenses in particular, starting from Swift 4, we don't even need code generation thanks to the new `KeyPath` [type](https://github.com/apple/swift-evolution/blob/master/proposals/0161-key-paths.md). From a `WritableKeyPath<Root,Value>` we can always generate a `Lens<Root,Value>` with code like the following:
+
+```swift
+extension WritableKeyPath {
+  var lens: Lens<Root,Value> {
+    return Lens<Root,Value>.init(
+      get: { whole in whole[keyPath: self] },
+      set: { part in
+        { whole in
+          var m = whole
+          m[keyPath: self] = part
+          return m
+        }
+    })
+  }
+}
+
+let passwordLens = (\LoginPage.credentials.passwordField.text).lens
+```
+
+Unfortunately, this is not going to work if the `Root` property onto which the lens is focusing is `let`, thus immutable - we won't get a `WritableKeyPath` for it - and also `KeyPath` is not available for enums, so code generation is still our friend here.
+
+For example, the following template will generate the lenses for all the properties of structs, equipped with a memberwise initializer, annotated with the comment `//sourcery: lens` (please refer to Sourcery documentation for more info):
+
+```stencil
+{% for type in types.structs|annotated:"lens" %}
+extension {{ type.name }} {
+  enum lens {
+    {% for variable in type.variables|!static|!computed %}
+    static let {{ variable.name }} = Lens<{{type.name}}, {{variable.typeName}}>(
+      get: { $0.{{variable.name}} },
+      set: { part in 
+        { whole in
+          {{type.name}}.init({% for argument in type.variables|!static|!computed %}{{argument.name}}: {% if variable.name == argument.name %}part{% else %}whole.{{argument.name}}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %})
+        }
+      }
+    ){% endfor %}
+  }
+}
+{% endfor %}
+```
+
+A slightly different template is going to be needed if the type is generic (because we won't be able to add static stored properties to it), but that's the general strategy.
+
+Tests are still going to be important, though, when we need to prove that functions like `compose` and `zip` work as intended. Also, in some cases we really want to write some lenses and prisms manually, and consequently we're really interested in testing them. For example we can define *prepared* lenses for particular data structures, like a `Dictionary`; I frequently use the following `Lens`, that focuses on a particular key of a dictionary:
+
+```swift
+extension Dictionary {
+  static func lens(at key: Key) -> Lens<Dictionary,Value?> {
+    return Lens<Dictionary,Value?>(
+      get: { $0[key] },
+      set: { part in
+        { whole in
+          var m_dict = whole
+          m_dict[key] = part
+          return m_dict
+        }
+      })
+  }
+}
+```
+
+This seems perfectly fine, but I want to be able to test this, and laws are the answer.
+
+Notice that the yielded lens here is of type `Lens<Dictionary,Value?>`: the `Part` is `Optional` and this is going to give us trouble in composition. What I mean is, we were able to generically compose lenses like this:
+
+```swift
+Lens<A,B> + Lens<B,C> = Lens<A,C>
+```
+
+But here, we could deal with something like this:
+
+```swift
+Lens<A,B?> + Lens<B,C> = ?
+```
+
+`B?` and `B` are not the same, so the regular composition doesn't work. Anyway, from that special composition we probably expect something like this:
+
+```swift
+Lens<A,B?> + Lens<B,C> = Lens<A,C?>
+```
+
+The question is: can we write this special `compose` function in a generic way? We could actually pretty easily write a function like the following that compiles:
+
+```swift
+func compose<A,B,C>(
+  _ first: Lens<A,B?>,
+  _ second: Lens<B,C>)
+  -> Lens<A,C?>
+{
+  /// some code
+}
+```
+
+But if we test our `Lens<A,C?>`, whatever the types are, we would observe that the `setGet` check will fail. Why? Let's reason about this.
+
+It's pretty easy to imagine what the `get` function of the lens will do: if the `B?` property is not `nil`, `get` will yield a non-`nil` `C?`, while if `B?` is `nil`, the resulting `C?` will be `nil`. But what about the set? It depends, and that's the problem here: because the relationship with `B` is encapsulated within the `Lens<A,C?>`, we cannot *see* what's going on in the data structure `A` on which we're applying the lens. For example, if we `set` a `C?` that is `nil`, because `C` is not optional for `B`, the only thing that we can do is to set the `B?` property to nil. But if we `set` a `C?` that is **not** nil, and we apply the lens to a data structure were `B?` is `nil`, we don't have anything to `set` the non-nil `C?` into! There is a similar problem with `KeyPath`: in fact if you grab a `KeyPath` with an optional property within the path itself, the resulting `KeyPath` is **not** going to be a `WritableKeyPath`.
+
+To solve this problem we need to provide a *default* value for `B`, that's going to be used in cases where we're setting a non-nil `C?` into a data structure where `B?` is nil:
+
+```swift
+func compose<A,B,C>(
+  _ first: Lens<A,B?>,
+  _ second: Lens<B,C>,
+  injecting: @escaping @autoclosure () -> B)
+  -> Lens<A,C?>
+{
+  return Lens<A,C?>.init(
+    get: { whole in first.get(whole).map(second.get) },
+    set: { optionalPart in { whole in
+      switch optionalPart {
+      case .some(let value):
+        return first.set(second.set(value)(first.get(whole) ?? injecting()))(whole)
+      case .none:
+        return first.set(nil)(whole)
+      }
+    }
+  })
+}
+```
+
+Notice that this `compose` function must yield a well-behaved lens for *every possible* default value for `B`: this means that, when testing the resulting lens with random `A` and `C?`, we also need to pass random values for `B`.
 
 ## Conclusion
 
-That's it for prisms and lenses in Swift. Of course there are many more applications for both, but I hope I was able to make a case for using these constructs, that in my opinion help both clarity of code and maintainability. Some time investment has to be made to wrap our head around these abstractions, but after a while I can assure you it's going to be pretty natural to use them and more importantly to *think* in terms of them. 
+`Lens` and `Prisms` are abstractions over the relationships between a data structure and its parts. They allow to encapsulate such relationships with any level of composition, both *vertical* (like from a parent to a child of a child) and *horizontal* (like from a parent to different children in parallel). This relationship can be extended in many different ways: we can *induce structure* from a child to a parent, like for example in giving *ordering logic* to a data structure starting from a comparator in one of its parts (it was shown by Brandon Williams in [this talk](https://www.youtube.com/watch?v=VFPhPOnPiTY)).
+
+The main use case is representing the modifications induced into a data structure by modifying its parts, and composition plays a huge role. A nice, simple use case for prisms is also to assert that an enum is in a particular case, like you would do with `guard case` but with a single expression, for example with a function like this:
+
+```swift
+extension Prism {
+  func isCase(_ whole: Whole) -> Bool {
+    return tryGet(whole) != nil
+  }
+}
+```
+
+In fact, once you get the basic definition laid out for `Lens` and `Prism`, a universe of possibilities opens: we just need to explore it.
+
+## Bonus Theory: the Lens/Prism duality
+
+Another piece of trivia that you get when googling about functional lenses and prisms is that "prism is the *dual* of lens". The mathematical concept of *duality* is pretty complex in general, but in this particular case it means that from a lens we can get something else (with different properties) by simply "reversing the arrows", or in other words, by reversing all the (directed) relationships. For example if we have a function of type:
+
+```swift
+(A) -> B
+```
+
+The dual of this function is going to be:
+
+```swift
+(B) -> A
+```
+
+This is **not** the *inverse function* of `(A) -> B`: the inverse function is the function that, applied after the first, gives us back exactly the value with which we started. This is simply a function with switched input and output, and the "dual" procedure simply allows us to discover that such a thing exists (pretty obvious, in this case).
+
+A little more interesting is the dual of a *product type*: we defined `struct` and `class` as product types, in the sense that they're constructed with a set of properties. The quintessential product type is a *tuple*, which **only** has properties (optionally tagged with names in Swift) and no other methods or behavior. A more rigorous way to see this is in term of *projections*: for every property, we have a function (the *getter*) from the type of the struct or class to the type of the property. So for example the following type:
+
+```swift
+struct Product<A,B> {
+  let a: A
+  let b: B
+}
+```
+
+can be defined completely by the functions:
+
+```swift
+let projectA: (Product<A,B>) -> A = { $0.a }
+let projectB: (Product<A,B>) -> B = { $0.b } 
+```
+
+To define a type that's dual to `Product<A,B>` we need to turn the projections into *injections*, like the following:
+
+```swift
+let injectA: (A) -> ?<A,B> = { ? }
+let injectB: (B) -> ?<A,B> = { ? } 
+```
+
+As many have probably already imagined, the `?` type that actually works in this case is an enum:
+
+```swift
+enum Coproduct<A,B> {
+  case a(A)
+  case b(B)
+}
+```
+
+with the injections becoming:
+
+```swift
+let injectA: (A) -> Coproduct<A,B> = { .a($0) }
+let injectB: (B) -> Coproduct<A,B> = { .b($0) } 
+```
+
+An enum is thus a *coproduct* type (*co* stands for *dual to*).
+
+Now, we defined lenses for product types, let's *discover* prisms for coproducts as *colenses* with the same procedure.
+
+First, we need a different representation for `Lens<Whole,Part>` that's a little more basic, less convenient but more explicit:
+
+```swift
+struct Lens<Whole,Part> {
+  let get: (Whole) -> Part
+  let set: (Product<Whole,Part>) -> Whole
+}
+```
+
+Notice that the `set` function is not *partially applied*, and `Product<Whole,Part>` is just a more explicit way of representing the simple tuple `(Whole,Part)`.
+
+Let's reverse everything: functions will reverse the arrows, and products become coproducts:
+
+```swift
+struct ?<Whole,Part> {
+  let ?: (Part) -> Whole
+  let ?: (Whole) -> Coproduct<Whole,Part>
+}
+```
+
+We're going to call this `Prism`. The first function is an injection (it's the dual of the `get` projection) so let's call it `inject`.
+
+```swift
+struct Prism<Whole,Part> {
+  let inject: (Part) -> Whole
+  let ?: (Whole) -> Coproduct<Whole,Part>
+}
+```
+
+The second function is a little more complex: it takes a `Whole` and returns an enum with two cases:
+
+- the first case is the `Whole` again, which means that we really didn't get anything out of it;
+- the second case is `Part`, which means that we were able to get what we were looking for.
+
+Thus, let's call this function `tryGet`. To reach the prism representation we used in the article, we can observe that in `Coproduct<Whole,Part>` the `Part` case is the only one really interesting, so for what matters to us it could as well be `Coproduct<(),Part>`; but the latter is basically `Optional<Part>` (in fact, the `none` case in `Optional` implicitly has `()` as associated type). Finally, by switching the order of the properties we get:
+
+```swift
+struct Prism<Whole,Part> {
+  let tryGet: (Whole) -> Part?
+  let inject: (Part) -> Whole
+}
+```
+
+which is the representation we're been using the whole time. Notice that we could have *discovered* this simply by starting with lens and being instructed about how to *reverse the arrows*.
+
+An that's all for now.
