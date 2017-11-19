@@ -433,9 +433,9 @@ Once we have these laws defined, we can test lenses and prisms by asserting that
 ```swift
 struct LensLaw {
   static func setGet<Whole, Part>(
-    lens: Lens<Whole,Part>,
-    whole: Whole,
-    part: Part)
+    _ lens: Lens<Whole,Part>,
+    _ whole: Whole,
+    _ part: Part)
     -> Bool where Part: Equatable
   {
     return lens.get(lens.set(part)(whole)) == part
@@ -451,7 +451,7 @@ For example, using SwiftCheck we could write a test case like the following:
 func testLensBehaves() {
   let lens = Whole.lens.someProperty
   property("Whole.lens.someProperty respects the setGet law") <- forAll { (whole: Whole, part: Part) in
-    lens.get(lens.set(part)(whole)) == part
+    LensLaw.setGet(lens,whole,part)
   }
 }
 ```
