@@ -466,9 +466,9 @@ let onProcessing = buttonStateLens.over • processingPrism.tryOver
 
 <pre><code class="language-swift">struct LensLaw {
   static func setGet&lt;Whole, Part&gt;(
-    lens: Lens&lt;Whole,Part&gt;,
-    whole: Whole,
-    part: Part)
+    _ lens: Lens&lt;Whole,Part&gt;,
+    _ whole: Whole,
+    _ part: Part)
     -&gt; Bool where Part: Equatable
   {
     return lens.get(lens.set(part)(whole)) == part
@@ -483,7 +483,7 @@ let onProcessing = buttonStateLens.over • processingPrism.tryOver
 <pre><code class="language-swift">func testLensBehaves() {
   let lens = Whole.lens.someProperty
   property(&quot;Whole.lens.someProperty respects the setGet law&quot;) &lt;- forAll { (whole: Whole, part: Part) in
-    lens.get(lens.set(part)(whole)) == part
+    LensLaw.setGet(lens,whole,part)
   }
 }
 </code></pre>
