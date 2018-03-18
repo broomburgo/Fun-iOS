@@ -3,7 +3,7 @@ disablePathToLower = false
 languageCode = "en-us"
 title = "Fun iOS"
 theme = "hemingway"
-copyright = "&copy; <a href=\"https://github.com/broomburgo\">Elviro Rocca</a> 2016"
+copyright = "&copy; <a href=\"https://github.com/broomburgo\">Elviro Rocca</a> 2018"
 
 # Number of blog posts displayed in each page
 paginate = 6
@@ -53,7 +53,7 @@ paginate = 6
 	# defaultKeywords = ["keyword1" , "keyword2" , "keyword3" , "keyword4"]
 
   [params.highlight]
-    style = "ocean"
+    style = "github"
     languages = ["swift"]
 
   [[params.social]]
