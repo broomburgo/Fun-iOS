@@ -6,11 +6,21 @@
     <description>Recent content in Posts on Fun iOS</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2016</copyright>
-    <lastBuildDate>Sun, 19 Nov 2017 14:00:01 +0100</lastBuildDate>
+    <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2018</copyright>
+    <lastBuildDate>Mon, 19 Mar 2018 15:00:01 +0100</lastBuildDate>
     
 	<atom:link href="https://broomburgo.github.io/fun-ios/post/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Algebraic data types for contextual and conditional computation</title>
+      <link>https://broomburgo.github.io/fun-ios/post/algebraic-datatypes-for-contextual-and-conditional-computation/</link>
+      <pubDate>Mon, 19 Mar 2018 15:00:01 +0100</pubDate>
+      
+      <guid>https://broomburgo.github.io/fun-ios/post/algebraic-datatypes-for-contextual-and-conditional-computation/</guid>
+      <description>An algebraic data type (ADT from now on) is a type (class, struct, enum, whatever the language allows us) that has no intrinsic semantics, and only exists for combining two or more other types in a specific way.
+For example, in Swift the tuple (Int,String) is an ADT, in the sense that the only information it conveys is the fact that one instance of it will contain one instance of Int and one instance of String.</description>
+    </item>
     
     <item>
       <title>Lenses and Prisms in Swift: a pragmatic approach</title>

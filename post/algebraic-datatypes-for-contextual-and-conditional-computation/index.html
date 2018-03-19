@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algebraic data types for contextual and conditional computation | Fun iOS</title>
+<link rel="stylesheet" href="https://broomburgo.github.io/fun-ios//css/style.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/github.min.css">
+
+
+    
+
+
+
+<section class="section">
+  <div class="container">
+    <nav class="nav">
+      <div class="nav-left">
+        <a class="nav-item" href="https://broomburgo.github.io/fun-ios/"><h1 class="title is-4">Fun iOS</h1></a>
+      </div>
+      <div class="nav-right">
+        <nav class="nav-item level is-mobile">
+          
+          <a class="level-item" href="https://github.com/broomburgo">
+            <span class="icon">
+              <i class="fa fa-github"></i>
+            </span>
+          </a>
+          
+          <a class="level-item" href="https://twitter.com/_logicist">
+            <span class="icon">
+              <i class="fa fa-twitter"></i>
+            </span>
+          </a>
+          
+        </nav>
+      </div>
+    </nav>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="subtitle is-6">March 19, 2018</h2>
+    <h1 class="title">Algebraic data types for contextual and conditional computation</h1>
+    <div class="content">
+      
+
+<p>An <a href="https://en.wikipedia.org/wiki/Algebraic_data_type">algebraic data type</a> (<strong>ADT</strong> from now on) is a type (<code>class</code>, <code>struct</code>, <code>enum</code>, whatever the language allows us) that has no intrinsic semantics, and only exists for combining two or more other types in a specific way.</p>
+
+<p>For example, in Swift the <em>tuple</em> <code>(Int,String)</code> is an ADT, in the sense that the only information it conveys is the fact that one instance of it will contain one instance of <code>Int</code> <strong>and</strong> one instance of <code>String</code>. The reason why it&rsquo;s called <em>algebraic</em> can be object of a fun exploration, but I don&rsquo;t want to talk about it right now: if you&rsquo;re interested I suggest reading <a href="http://chris-taylor.github.io/blog/2013/02/10/the-algebra-of-algebraic-data-types/">this excellent article</a> and subscribing to the wonderful <a href="https://www.pointfree.co">PointFree</a> series - episode 4 is about ADTs, and there probably will be many more on the topic.</p>
+
+<p>In this article I&rsquo;m going to talk about 2 ADTs, and in which cases they can be useful for real-world computational problems. I&rsquo;m also going to suggest a specific naming convention for these  types, based on <a href="https://www.youtube.com/watch?v=IBeceQHz2x8">category theory</a> (if you&rsquo;re interested I strongly suggest following the resource I just linked, but let&rsquo;s not digress).</p>
+
+<h2 id="products">Products</h2>
+
+<p>A <strong>product type</strong> is the combination of 2 types. We could define a product of <em>more than 2</em> types but it&rsquo;s easier to treat and reason about the case with 2, knowing that we can always decompose a bigger combination in smaller pairs.</p>
+
+<p>A nice way to define the characteristics of a type is in terms of what kind on instances I&rsquo;m expecting for it: for example, <code>Bool</code> is a type with exactly <em>2 possible instances</em>, <code>true</code> and <code>false</code>: in fact, when treating types algebraically, <code>Bool</code> is usually called <code>Two</code>. <code>Int</code> is a type that has, on my computer, <code>2^64</code> possible instances, which can be considered, in practice, <em>infinite</em>. The following <code>enum</code>:</p>
+
+<pre><code class="language-swift">enum Direction {
+    case north
+    case south
+    case west
+    case east
+}
+</code></pre>
+
+<p>has exactly 4 instances, so it would called <code>Four</code>. But also the following:</p>
+
+<pre><code class="language-swift">enum Element {
+    case earth
+    case wind
+    case fire
+    case ice
+}
+</code></pre>
+
+<p>has 4 instances, so should this also be <code>Four</code>? Yes, because from an algebraic standpoint, they are <em>isomorphic</em>: each instance of the first corresponds to a specific instance of the second, and viceversa. When talking about the algebra of types, we are interested about their <em>shape</em>, and how different shapes are related to each other and compose: domain-specific names like <code>Direction</code> and <code>Element</code> are irrelevant.</p>
+
+<p>Being a combination of two types means, for a product type, that every instance of it contains one instance of the first and one instance of the second, so the number of its possible instances is the number of possible instances of the first <strong>times</strong> the number of possible instance of the second, therefore we call it <strong>product</strong>. In set theory, a product set would be the <em>cartesian product</em> between two sets, that is, the set of all possible <em>pairs</em> of elements from the two sets: in fact, a usual way to define the product type in computation is with the <code>Pair</code> class/struct. But I prefer to be more explicit and call this type <code>Product</code>. Product of what? <em>Any two other types</em>, so it&rsquo;s going to be generic of course:</p>
+
+<pre><code class="language-swift">struct Product&lt;A,B&gt; {
+    let first: A
+    let second: B
+}
+</code></pre>
+
+<p>A product is usually defined with the <code>first</code> and <code>second</code> properties, holding the instances of the types with which the product is formed. But I prefer a more category-theoretical way of defining it, that is, in terms of the <em>functions</em> from the product itself to its components:</p>
+
+<pre><code class="language-swift">func first&lt;A,B&gt;(_ product: Product&lt;A,B&gt;) -&gt; A {
+    return product.first
+}
+
+func second&lt;A,B&gt;(_ product: Product&lt;A,B&gt;) -&gt; B {
+    return product.second
+}
+</code></pre>
+
+<p>The functions <code>first</code> and <code>second</code> have type, respectively, <code>(Product&lt;A,B&gt;) -&gt; A</code> and <code>(Product&lt;A,B&gt;) -&gt; B</code>: this is a universal way of defining what a product is, that is, if these functions exist for a type, then that type is a product (from a category-theoretical standpoint it&rsquo;s a little more complex than that, but it&rsquo;s sufficient to say for now that something is a product if those functions are sufficient to define it, without any additional information involved or computational burden).</p>
+
+<p>Some of you may have noticed that a product is really a tuple of  two elements, so <code>Product&lt;A,B&gt;</code> could actually be defined as a <code>typealias</code>, redefining also the <code>first</code> and <code>second</code> functions, like the following:</p>
+
+<pre><code class="language-swift">typealias Product&lt;A,B&gt; = (A,B)
+
+func first&lt;A,B&gt;(_ product: Product&lt;A,B&gt;) -&gt; A {
+    return product.0
+}
+
+func second&lt;A,B&gt;(_ product: Product&lt;A,B&gt;) -&gt; B {
+    return product.1
+}
+</code></pre>
+
+<p>The reason why I prefer to encapsulate a product inside its own <code>struct</code> is that this way we can extend it with methods (in Swift we can only add methods to &ldquo;nominal&rdquo; types).</p>
+
+<blockquote>
+<p>A quick digression. Using free functions is <em>a lot</em> more powerful than writing extensions in Swift, due to the limitations of its current type system, but I&rsquo;m going to stick to methods when possible for their familiarity: also, methods give us a <em>scope</em> to work with, and Xcode autocompletion when writing a dot <code>.</code> is good enough to justify the burden of extending types instead of using something that&rsquo;s so much simpler to handle and compose like free functions. This also means that I&rsquo;m not going to use the <code>first</code> and <code>second</code> free functions, and will prefer the direct call of <code>.first</code> and <code>.second</code> properties.</p>
+</blockquote>
+
+<p>So, if I give you a product it means that I&rsquo;m giving you <em>two things</em> in a generic way, without any additional burden related to domain-specific constructs. Ever wanted to return two things from a function instead of one? The product is the way.</p>
+
+<h2 id="contextual-computation">Contextual computation</h2>
+
+<p>A classic use case for passing around two things instead of one is when we a have a <em>main</em> piece of information paired with some additional <em>context</em>. Suppose for example we want to transform a   set of goods into something suitable for the user who&rsquo;s currently in session, ordered by the user&rsquo;s preference; we could write a function like this:</p>
+
+<pre><code class="language-swift">func getPreferredGoods(from set: Set&lt;Item&gt;) -&gt; List&lt;Item&gt; {
+    /// implementation by using a &quot;global&quot; user
+}
+</code></pre>
+
+<p>We&rsquo;re probably going to grab the user currently in session (from some global instance) and use the user&rsquo;s preferences to first filter the <code>Set&lt;Item&gt;</code>, and then order it based on the order of preferences. To make this function decently isolated (and pure) we could easily improve this by passing also the <code>User</code> in, but instead of passing another parameter in the function, let&rsquo;s use a <code>Product</code> instead:</p>
+
+<pre><code class="language-swift">func getPreferredGoods(from product: Product&lt;User,Set&lt;Item&gt;&gt;) -&gt; List&lt;Item&gt; {
+    /// implementation by using the user contained in the product
+}
+</code></pre>
+
+<p>Conventionally, the &ldquo;main&rdquo; part of the product is the <code>second</code> part, while the context is the <code>first</code>. The improvement we achieve by using an explicit product type is when we decide that we&rsquo;re also going to filter the list of goods by availability per age, considering again the user in session:</p>
+
+<pre><code class="language-swift">func getAgeAvailable(from items: Product&lt;User,List&lt;Item&gt;&gt;) -&gt; List&lt;Item&gt; {
+    /// implementation by using the user contained in the product
+}
+</code></pre>
+
+<p>Now we have two functions that are both of the same shape, that is, <code>Product&lt;Context,A&gt; -&gt; B</code>, and we&rsquo;d like to compose them. In our specific example, the <code>List&lt;Item&gt;</code> returned from the first function is the input of the second, but it&rsquo;s paired again with <code>User</code>. We could in theory return again a <code>Product</code> by it would be cumbersome because each time we would be simply pairing the result again with the <code>User</code>, something that would be discarded anyway by the actual caller of the function.</p>
+
+<p>To solve this, in a completely generic way, we can add a method to <code>Product&lt;A,B&gt;</code> that accepts a function in the shape <code>Product&lt;A,B&gt; -&gt; C</code> and returns a new <code>Product&lt;A,C&gt;</code>, let&rsquo;s call it <code>extend</code>:</p>
+
+<pre><code class="language-swift">extension Product {
+    func extend &lt;C&gt; (_ transform: (Product&lt;A,B&gt;) -&gt; C) -&gt; Product&lt;A,C&gt; {
+        return Product&lt;A,C&gt;.init(
+            first: first,
+            second: transform(self))
+    }
+}
+</code></pre>
+
+<p>As you can see, this simply gets the new value and pairs it again with the context. To stress the fact that the <code>second</code> value is our <em>main</em> value let&rsquo;s add a computed property <code>extract</code> that simply returns it:</p>
+
+<pre><code class="language-swift">extension Product {
+    var extract: B {
+        return second
+    }
+}
+</code></pre>
+
+<p>Now, given that we have our initial product, we can compose the functions like the following:</p>
+
+<pre><code class="language-swift">let initial: Product&lt;User,Set&lt;Item&gt;&gt; = ...
+
+let items = getPreferredGoods(initial)
+    .extend(getAgeAvailable)
+    .extract
+</code></pre>
+
+<p>Now, in case we also need to add another transformation - that requires the <code>User</code> as context - to this &ldquo;pipeline&rdquo; we simply need define our function in an isolated way, and then <code>extend</code> again:</p>
+
+<pre><code class="language-swift">func getOrder(considering items: Product&lt;User,List&lt;Item&gt;&gt;) -&gt; Order {
+    /// implementation
+}
+
+let initial: Product&lt;User,Set&lt;Item&gt;&gt; = ...
+
+let order = getPreferredGoods(initial)
+    .extend(getAgeAvailable)
+    .extend(getOrder)
+    .extract
+</code></pre>
+
+<p>Let&rsquo;s consider a different case: we want to compute the price for the order in the same pipeline. This a slightly different computation, however, because we really don&rsquo;t care about an <code>User</code>, so our isolated function would really look like this:</p>
+
+<pre><code class="language-swift">func getPrice(from order: Order) -&gt; Price {
+    /// implementation
+}
+</code></pre>
+
+<p>We can easily plug this function into our pipeline by adding another generic method to <code>Product&lt;A,B&gt;</code>:</p>
+
+<pre><code class="language-swift">extension Product {
+    func map &lt;C&gt; (_ transform: (B) -&gt; C) -&gt; Product&lt;A,C&gt; {
+        return Product&lt;A,C&gt;.init(
+            first: first,
+            second: transform(second))
+    }
+}
+</code></pre>
+
+<p>This is called <code>.map</code>, like <code>Array.map</code>, <code>Optional.map</code> and so on, and does the same thing: it transform the <em>contained</em> value without affecting the <em>container</em>. Finally:</p>
+
+<pre><code class="language-swift">let price = getPreferredGoods(initial)
+    .extend(getAgeAvailable)
+    .extend(getOrder)
+    .map(getPrice)
+    .extract
+</code></pre>
+
+<h2 id="doubling-on-information">Doubling on information</h2>
+
+<p>Another use case for using products to represent our states is related to functions that return some main value coupled with additional information, like a <strong>log</strong>: a function might compute something and return it, while also informing the user about the process, with, usually, some text. We could, of course, just log in console, but there are cases where we&rsquo;d probably interested in catching this log and <strong>choose later</strong> what to do with it: for example, saving it into a file, sending it to some web services to collect data and so on.</p>
+
+<p>As before, we&rsquo;d like to compose functions in this shape:</p>
+
+<pre><code class="language-swift">func computeWithLog &lt;A,B&gt; (_ value: A) -&gt; Product&lt;Log,B&gt; {
+    /// implementation
+}
+</code></pre>
+
+<p>and produce at the end a value of type <code>Product&lt;Log,Something&gt;</code>. Our &ldquo;context&rdquo; in this case is not used within the function, but it&rsquo;s supposed to be useful for the caller. We can try and compose functions in this shape by adding a new generic method to <code>Product&lt;A,B&gt;</code>, but for this use case we incur in some specific challenges, as we can see from the following:</p>
+
+<pre><code class="language-swift">extension Product {
+    func wrongCompose &lt;C&gt; (_ transform: (B) -&gt; Product&lt;A,C&gt;) -&gt; Product&lt;A,C&gt; {
+        return transform(extract) /// this is wrong
+    }
+}
+</code></pre>
+
+<p>The problem with this is that we&rsquo;re essentially <strong>forgetting the previous context</strong>: the returned product is completely produced by the <code>transform</code> function, and the previous context is lost. What if we simply <code>map</code> it? Let&rsquo;s try:</p>
+
+<pre><code class="language-swift">let initial: Product&lt;Log,A&gt; = ///
+
+func computeWithLog (_ value: A) -&gt; Product&lt;Log,B&gt; { /// }
+
+let final = initial.map(compute) /// this has type Product&lt;Log,Product&lt;Log,B&gt;&gt;
+</code></pre>
+
+<p>As you can see in the code, the type of <code>final</code> is <code>Product&lt;Log,Product&lt;Log,B&gt;&gt;</code>, definitely not what we wanted: it&rsquo;s nested products, and we&rsquo;d like to <em>join</em> them for good, into a single <code>Product&lt;Log,B&gt;</code>. To do this we need a way to generically compose instances of type <code>Log</code>: there&rsquo;s <strong>a lot</strong> to be said about this topic, but it&rsquo;s not in the scope of this article to discuss about types with a generic composition operation. For now let&rsquo;s simply use a type that we&rsquo;re sure composes easily and obviously, an <code>Array</code>: let&rsquo;s just use <code>[Log]</code> instead of <code>Log</code>.</p>
+
+<p>We can actually <em>flatten</em> an instance of type <code>Product&lt;[Log],Product&lt;[Log],B&gt;&gt;</code> very easily, but this is going to be a case where, due to the limitations of Swift generics system, we can really only do this with a free function:</p>
+
+<pre><code class="language-swift">func flatten &lt;A,B&gt; (_ nested: Product&lt;A,Product&lt;A,B&gt;&gt;) -&gt; Product&lt;A,B&gt; where A: RangeReplaceableCollection {
+    let context1 = nested.first
+    let context2 = nested.extract.first
+    return Product&lt;A,B&gt;.init(
+        first: context1 + context2,
+        second: nested.extract.extract)
+}
+</code></pre>
+
+<p>This way we&rsquo;re not losing any information by staying completely generic. Notice that we&rsquo;re not explicitly saying that <code>A</code> is an <code>Array</code>: we only need to constrain <code>A</code> to be a <code>RangeReplaceableCollection</code>, so we can use the <code>+</code> operator to concatenate the two collections.</p>
+
+<p>So, we can transform a <code>Product&lt;Log,A&gt;</code> with a function of type <code>(A) -&gt; Product&lt;Log,B&gt;</code> by first <em>mapping</em> the product, and the <em>flattening</em> the result. To put things together, let&rsquo;s just define a <code>flatMap</code> method (see why it&rsquo;s called <em>flatMap</em>?):</p>
+
+<pre><code class="language-swift">extension Product where A: RangeReplaceableCollection {
+    func flatMap &lt;C&gt; (_ transform: (B) -&gt; Product&lt;A,C&gt;) -&gt; Product&lt;A,C&gt; {
+        return flatten(map(transform))
+    }
+}
+</code></pre>
+
+<p><code>Product.flatMap</code> is like <code>Array.flatMap</code> and <code>Optional.flatMap</code>: transforms a container with a function that turns the contained value into another container, then joins the nested containers into one. Finally, to explicitly &ldquo;read&rdquo; the <code>Log</code>s, along with the computed value, we can add a simple computed property that returns a tuple:</p>
+
+<pre><code class="language-swift">extension Product {
+    var read: (A,B) {
+        return (first,second)
+    }
+}
+</code></pre>
+
+<p>The transformation pipeline that we&rsquo;re expecting here is something like the following:</p>
+
+<pre><code class="language-swift">let initial: Product&lt;[Log],A&gt; = ///
+
+let (logs, final) = initial
+    .flatMap(computeWithLog1)
+    .flatMap(computeWithLog2)
+    .flatMap(computeWithLog3)
+    .read
+</code></pre>
+
+<p>What <code>Log</code> we&rsquo;re going to have for our <code>inital</code> value? No log at all, so we need a generic way to encapsulate some value into <code>Product&lt;[Log],A&gt;</code> with no log attached; let&rsquo;s add a <code>.pure</code> static method:</p>
+
+<pre><code class="language-swift">extension Product where A: RangeReplaceableCollection {
+    static func pure(_ value: B) -&gt; Product&lt;A,B&gt; {
+        return Product&lt;A,B&gt;.init(first: A.init(), second: value)
+    }
+}
+</code></pre>
+
+<p>The <code>RangeReplaceableCollection</code> protocol allows us to generate instances (of a type conforming to it) with no values, thus constructing <em>empty</em> instances.</p>
+
+<p>The <em>log</em> example is classic for this kind of product composition, but there are many other cases where this idea of composition based on <em>flatMap</em> turns out to be useful: the idea is that we want to <em>attach</em> some other value to our main computed value, and instances of the attached value must be composable in a generic way; here&rsquo;s a few examples:</p>
+
+<ul>
+<li>discarded information that we want to keep around;</li>
+<li>executable functions that perform side effects and return <code>Void</code>;</li>
+<li>a state that must be updated (es. a session token or a date);</li>
+<li>some quantity that needs to be accumulated at every step;</li>
+</ul>
+
+<p>Of course we could obtain all this functionality and more with a bunch of <strong>ad-hoc</strong> types with made-up names that are supposed to be sensible (there&rsquo;s even literature on how to chose names for ad-hoc classes and methods), but the good thing about <code>Product&lt;A,B&gt;</code> is that it&rsquo;s completely generic, conveys a specific meaning very clearly, and offers a lot of composition utilities (many more than I just shown).</p>
+
+<h2 id="coproducts">Coproducts</h2>
+
+<p>When approaching things in a category-theoretical way we essentially double our abstraction powers, because a key concept in category theory is <em>duality</em>: by inverting the relationships, I get something new.</p>
+
+<p>I initially defined a product with a struct, and then shown a representation with the <code>first</code> and <code>second</code> functions, that is, functions in this shape:</p>
+
+<pre><code class="language-swift">let first: (Product&lt;A,B&gt;) -&gt; A
+let second: (Product&lt;A,B&gt;) -&gt; B
+</code></pre>
+
+<p>Starting from the functions this time around we can come up with a <em>dual</em> representation - in which everything is <em>co-something</em> - by simply inverting the arrows:</p>
+
+<pre><code class="language-swift">let coFirst: (A) -&gt; Coproduct&lt;A,B&gt;
+let coSecond: (B) -&gt; Coproduct&lt;A,B&gt;
+</code></pre>
+
+<p><code>Coproduct</code> needs to be a type independently constructible from <code>A</code> and from <code>B</code>, and because <code>A</code> and <code>B</code> are generic, there isn&rsquo;t going to be any information about <code>B</code> if the type is constructed with <code>A</code>, and viceversa (that&rsquo;s for saying that <code>Coproduct</code> is not going to pull the instance without which is was constructed out of the hat). This type could be represented in many ways, but luckily in Swift we have a structure that&rsquo;s perfect for coproducts: an <code>enum</code> with associated values.</p>
+
+<pre><code class="language-swift">enum Coproduct&lt;A,B&gt; {
+    case left(A)
+    case right(B)
+}
+</code></pre>
+
+<p>The functions that produce a <code>Coproduct</code> are called <code>left</code> and <code>right</code> to suggest an alternative choice (instead of <code>first</code> and <code>second</code> that suggest the presence of both), and their implementation could be the following:</p>
+
+<pre><code class="language-swift">func left &lt;A,B&gt; (_ value: A) -&gt; Coproduct&lt;A,B&gt; {
+    return Coproduct&lt;A,B&gt;.left(value)
+}
+
+func right &lt;A,B&gt; (_ value: B) -&gt; Coproduct&lt;A,B&gt; {
+    return Coproduct&lt;A,B&gt;.right(value)
+}
+</code></pre>
+
+<blockquote>
+<p>Unfortunately, it&rsquo;s not possible to use these functions freely in Swift without specifying the returned type, because in Swift a generic function cannot be specialized when calling it. But as for <code>Product&lt;A,B&gt;</code>, I&rsquo;ll prefer the usage of the <code>.left</code> and <code>.right</code> cases instead of the free functions, and cases must be scoped (ex. <code>Coproduct&lt;Int,String&gt;.left(42)</code>) to be used, removing the problem we have with free functions.</p>
+</blockquote>
+
+<p>An instance of a coproduct contains information <em>either</em> for a case <em>or</em> the other, while a product contains <em>both</em>. Notice that associated values can have type <code>()</code> (typealiased to <code>Void</code>), for example <code>Coproduct&lt;(),String&gt;</code>; a type like this could be a little annoying because for calling the <code>.left</code> case we would need something like the following:</p>
+
+<pre><code class="language-swift">let x = Coproduct&lt;(),String&gt;.left(())
+</code></pre>
+
+<p>Swift explicitly requires an &ldquo;instance&rdquo; of <code>()</code>, which is of course the empty tuple <code>()</code> (the same symbol is used for the type and the instance). But, if we think about it, a <code>Coproduct&lt;(),String&gt;</code> is really a type that either contains a <code>String</code> or <em>nothing</em> (the empty tuple), and there already exist a type like that: I&rsquo;m talking about <code>Optional&lt;String&gt;</code>. An <code>Optional</code> is a coproduct for which a case has no associated value, and it&rsquo;s used to represent some piece of information, or lack of thereof, and if we really need a coproduct from an optional we can always obtain it completely generically:</p>
+
+<pre><code class="language-swift">extension Optional {
+    func toCoproduct() -&gt; Coproduct&lt;(),Wrapped&gt; {
+        switch self {
+        case let .some(value):
+            return .right(value)
+        case .none:
+            return .left(())
+        }
+    }
+}
+</code></pre>
+
+<p>This just gave us an insight on how coproducts are commonly used as a computational tool.</p>
+
+<h2 id="conditional-computation">Conditional computation</h2>
+
+<p>A coproduct can be used to represent either something or something else. If a function returns a coproduct, it&rsquo;s expressing the idea that two possible things could have happened inside the function, with two possible outcomes. The classic use case for a coproduct is represented by functions that could return an <em>error</em>.</p>
+
+<p>Consider a function with this shape:</p>
+
+<pre><code class="language-swift">enum OrderError: Error {
+    case noPaymentMethod
+    case noUserPermission
+}
+
+func process(order: Order) -&gt; Coproduct&lt;OrderError,OrderResult&gt; {
+    /// check if order is complete
+}
+</code></pre>
+
+<p>Just by looking at the function signature we immediately see that an <code>OrderError</code> could be produced, describing the problem that might have arisen. This is similar to what <code>throws</code> expresses in idiomatic Swift, but there are several advantages in using a coproduct explicitly.</p>
+
+<p>Firstly, by using a coproduct we are explicitly indicating the error type, while <code>throws</code> coalesces everything under the <code>Error</code> umbrella, requiring matching errors with <code>catch</code> that&rsquo;s not guaranteed to be exhaustive (while <code>switch</code> is).</p>
+
+<p>But more importantly, <code>Coproduct&lt;A,B&gt;</code> easily composes and can be used in situations where <code>throws</code> is cumbersome or straight-out unusable. For example, consider an asynchronous version of the <code>process(order:)</code> function, that takes a callback:</p>
+
+<pre><code class="language-swift">/// Version 1: inconvenient and ugly
+func process(order: Order, onComplete: (OrderError?, OrderResult?) -&gt; ()) { }
+
+/// Version 2: cumbersome and uninformative
+func process(order: Order, onComplete: (() throws -&gt; OrderResult) -&gt; ()) { }
+
+/// Version 3: perfect
+func process(order: Order, onComplete: (Coproduct&lt;OrderError,OrderResult&gt;) -&gt; ()) { }
+</code></pre>
+
+<ul>
+<li><p><code>Version 1</code> shows the classic approach, adopted in languages with a limited type system, and it&rsquo;s the worst of all 3: we manually need to check and unwrap both the error and the result, without any guarantee that either of them will be there, because the type system is not helping us.</p></li>
+
+<li><p><code>Version 2</code> is better: the type system now is more explicit, and meaningless states (like no error <strong>and</strong> no result) cannot be represented, but we&rsquo;re getting a <em>function</em> as input to the callback, which means that to get the result we need to call it, and implementing <code>process(order:)</code> becomes more complex. Also, we&rsquo;re not getting any information about the error&rsquo;s specific type.</p></li>
+
+<li><p><code>Version 3</code> is the best of both worlds: we&rsquo;re getting a value, over which we can pattern match, and we&rsquo;re being specific about the returned error.</p></li>
+</ul>
+
+<p>By convention, the <code>.right</code> case is the one reserved to the <em>happy path</em>, where everything is fine (in fact, is <em>right</em>), and the <code>.left</code> case is used for when there&rsquo;s an error. To operate within a coproduct, whatever the branch is, we use composition methods like the ones we saw for products. Suppose for example we want to operate with the value contained in a coproduct without unwrapping it; we can easily transform it with a simple <code>map</code>:</p>
+
+<pre><code class="language-swift">extension Coproduct {
+    func map &lt;T&gt; (_ transform: (B) -&gt; T) -&gt; Coproduct&lt;A,T&gt; {
+        switch self {
+        case let .left(value):
+            return .left(value)
+        case let .right(value):
+            return .right(transform(value))
+        }
+    }
+}
+</code></pre>
+
+<p>We&rsquo;re still following the convention that the <code>.right</code> value is the one we want to operate upon. Like with <code>Array</code>, <code>Optional</code> and <code>Product</code>, the <code>.map</code> method allows us to operate within a container without opening it: we&rsquo;re offloading the machinery to transform the contained value to the container itself.</p>
+
+<p>What if the function transforming the contained value returned another <code>Coproduct</code> with the same kind of error? As we did with <code>Product</code>, we can <code>.flatMap</code> the whole thing, still assuming that the <code>.right</code> case is the good one.</p>
+
+<pre><code class="language-swift">extension Coproduct {
+    func flatMap &lt;T&gt; (_ transform: (B) -&gt; Coproduct&lt;A,T&gt;) -&gt; Coproduct&lt;A,T&gt; {
+        switch self {
+        case let .left(value):
+            return .left(value)
+        case let .right(value):
+            return transform(value)
+        }
+    }
+}
+</code></pre>
+
+<p>Then, a series of functions in the shape <code>(A) -&gt; Coproduct&lt;B,C&gt;</code> can be chained in a pipeline like the following:</p>
+
+<pre><code class="language-swift">let transform1: (A) -&gt; Coproduct&lt;SomeError,B&gt;
+let transform2: (B) -&gt; Coproduct&lt;SomeError,C&gt;
+let transform3: (C) -&gt; D
+let transform4: (D) -&gt; Coproduct&lt;SomeError,E&gt;
+
+let input: A
+
+let output = transform1(input)
+    .flatMap(transform2)
+    .map(transform3)
+    .flatMap(transform4)
+</code></pre>
+
+<p>To conclude this section, in the case we have different errors, we can - of course - have a <code>.mapError</code> function:</p>
+
+<pre><code class="language-swift">extension Coproduct {
+    func mapError &lt;T&gt; (_ transform: (A) -&gt; T) -&gt; Coproduct&lt;T,B&gt; where T: Error {
+        switch self {
+        case let .left(value):
+            return .left(transform(value))
+        case let .right(value):
+            return .right(value)
+        }
+    }
+}
+</code></pre>
+
+<p>I think I made the point for using <code>Coproduct</code> for handling errors, let&rsquo;s move on.</p>
+
+<h2 id="railway-programming">Railway programming</h2>
+
+<p>Another interesting use case for coproducts is the one when we don&rsquo;t have a <em>privileged</em> path, and we really want to handle both paths at the same time. The problem arises when reasoning in terms of pipelines, in which some information is passed from one stage to another, but we incur in the case where the pipeline is supposed to <em>split</em>. A classic (nowadays) transformation pipeline frequently used in iOS and app development in general is a chain of <code>Observable</code> operators, like those in <a href="https://github.com/ReactiveX/RxSwift">RxSwift</a>. Let&rsquo;s assume we retrive an <code>Int</code> from some <code>Payload</code>, and then we must split our pipeline based on the value of such <code>Int</code>:</p>
+
+<pre><code class="language-swift">let rxPayload: Observable&lt;Payload&gt; = ...
+
+let rxOutcome = rxPayload
+    .map { $0.getIntValue }
+    ??? /// here we should have two lanes, one for intValue &lt; 0 and one for intValue &gt;= 0
+</code></pre>
+
+<p>One possibility here is to map our <code>Int</code> into a <code>Coproduct&lt;Int,Int&gt;</code> that has different meaning based on the <code>case</code>. Before going further, we need methods on <code>Coproduct&lt;A,B&gt;</code> that allow us to operate on the branches without assigning a particular &ldquo;priority&rdquo; to any of them:</p>
+
+<pre><code class="language-swift">extension Coproduct {
+    func mapLeft &lt;T&gt; (_ transform: (A) -&gt; T) -&gt; Coproduct&lt;T,B&gt; {
+        switch self {
+        case let .left(value):
+            return .left(transform(value))
+        case let .right(value):
+            return .right(value)
+        }
+    }
+
+    func mapRight &lt;T&gt; (_ transform: (B) -&gt; T) -&gt; Coproduct&lt;A,T&gt; {
+        switch self {
+        case let .left(value):
+            return .left(value)
+        case let .right(value):
+            return .right(transform(value))
+        }
+    }
+}
+</code></pre>
+
+<p>We also need a way to <em>reconcile</em> the branches into a single value, that is, given a <code>Coproduct&lt;A,B&gt;</code>, we&rsquo;d like to always be able to produce a single generic <code>T</code>: in a sense, given a coproduct, we&rsquo;d like to <em>fold</em> it into something else, the same way we fold a sequence with a <code>reduce</code> method, transforming an entire list into a single value. We need a new method, let&rsquo;s call it <code>fold</code>:</p>
+
+<pre><code class="language-swift">extension Coproduct {
+        func fold &lt;T&gt; (onLeft: (A) -&gt; T, onRight: (B) -&gt; T) -&gt; T {
+        switch self {
+        case let .left(value):
+            return onLeft(value)
+        case let .right(value):
+            return onRight(value)
+        }
+    }
+}
+</code></pre>
+
+<p>The implementation is simple, but the implications are many: <code>fold</code> allows us to escape from the &ldquo;world of coproducts&rdquo;, and go back to the mortal plane, in a completely generic and type-safe way. I consider the concept of <em>folding</em> at least as important as the idea of <em>mapping</em>.</p>
+
+<p>To make things easier we&rsquo;d like to extend <code>Observable</code> to easily <code>.map</code> on the <code>.left</code> and <code>.right</code> cases: unfortunately, Swift type system is not good enough to let us generically extend a generic type where the parameter is again generic. So we&rsquo;re going to write free functions (like we did with <code>flatten</code>) and add a <code>let</code> operator to <code>Observable</code> to permit extensibility with functions of type <code>(Observable) -&gt; Observable</code>:</p>
+
+<pre><code class="language-swift">extension Observable {
+    func `let` &lt;A&gt; (_ transform: (Observable) -&gt; Observable&lt;A&gt;) -&gt; Observable&lt;A&gt; {
+        return transform(self)
+    }
+}
+</code></pre>
+
+<p>The idea is to add functions that operate on an <code>Observable&lt;Coproduct&lt;A,B&gt;&gt;</code> and allow to directly manipulate one of the branches; those functions can be chained in any order, because those on the <code>.left</code> branch are not going to interfere with those on the <code>.right</code>.</p>
+
+<pre><code class="language-swift">func mapLeft &lt;A,B,C&gt; (_ transform: @escaping (A) -&gt; C) -&gt; (Observable&lt;Coproduct&lt;A,B&gt;&gt;) -&gt; Observable&lt;Coproduct&lt;C,B&gt;&gt; {
+    return {
+        $0.map {
+            $0.mapLeft(transform)
+        }
+    }
+}
+
+func flatMapLeft &lt;A,B,C&gt; (_ transform: @escaping (A) -&gt; Observable&lt;C&gt;) -&gt; (Observable&lt;Coproduct&lt;A,B&gt;&gt;) -&gt; Observable&lt;Coproduct&lt;C,B&gt;&gt; {
+    return {
+        $0.flatMap {
+            $0.fold(
+                onLeft: { transform($0).map(Coproduct.left) },
+                onRight: { .just(.right($0)) })
+        }
+    }
+}
+
+func mapRight &lt;A,B,C&gt; (_ transform: @escaping (B) -&gt; C) -&gt; (Observable&lt;Coproduct&lt;A,B&gt;&gt;) -&gt; Observable&lt;Coproduct&lt;A,C&gt;&gt; {
+    return {
+        $0.map {
+            $0.mapRight(transform)
+        }
+    }
+}
+
+func flatMapRight &lt;A,B,C&gt; (_ transform: @escaping (B) -&gt; Observable&lt;C&gt;) -&gt; (Observable&lt;Coproduct&lt;A,B&gt;&gt;) -&gt; Observable&lt;Coproduct&lt;A,C&gt;&gt; {
+    return {
+        $0.flatMap {
+            $0.fold(
+                onLeft: { .just(.left($0)) },
+                onRight: { transform($0).map(Coproduct.right) })
+        }
+    }
+}
+
+func reconcile &lt;A&gt; (_ observable: Observable&lt;Coproduct&lt;A,A&gt;&gt;) -&gt; Observable&lt;A&gt; {
+    return observable.map {
+        $0.fold(
+            onLeft: { $0 },
+            onRight: { $0 })
+    }
+}
+</code></pre>
+
+<p>We&rsquo;re using the methods we just defined for <code>Coproduct&lt;A,B&gt;</code> to add useful functions for operating directly on <code>Observable</code>: notice that we also added a <code>reconcile</code> function, that&rsquo;s useful when we have an observable of a coproduct, but the branches hold the same type. To proceed with our example, we could imagine an observable chain where, in a case, we&rsquo;re acquiring some information about the validity of our value via a HTTP request, while in another we&rsquo;re directly manipulating the input value:</p>
+
+<pre><code class="language-swift">let rxPayload: Observable&lt;Payload&gt; = ...
+let requestValidity: (Int) -&gt; Observable&lt;Outcome&gt; = ...
+
+let rxOutcome: Observable&lt;Outcome&gt; = rxPayload
+    .map { $0.getIntValue }
+    .map { $0 &lt; 0
+        ? Coproduct.left($0)
+        : Coproduct.right($0)
+    }
+    
+    /// handle &quot;left&quot; branch
+    .let(mapLeft { intValue in
+        &quot;Value \(intValue) is not valid&quot;
+    })
+    .let(mapLeft(Outcome.init(string:))
+    
+    /// handle &quot;right&quot; branch
+    .let(flatMapRight(requestValidity))
+    
+    /// reconcile to &quot;Outcome&quot;
+    .let(reconcile)
+</code></pre>
+
+<p>Notice that the <em>left</em> and <em>right</em> subchains could be added in any order (even mixed) because they&rsquo;re completely independent. At the final stage, when the reconcile happens, the only thing that&rsquo;s required is that both branches contain the same type of value, in this case <code>Outcome</code>; this is how an <em>effectful</em> computation, that requires conditional branching, is kept <strong>pure</strong>: we branch, then we fold.</p>
+
+<p>If the branches don&rsquo;t end up containing the same value, for example when we use a <code>Coproduct&lt;ErrorType,ValueType&gt;</code> where the left branch is an error, we can reenter the Swift world of imperative programming by defining a <code>.run()</code> method that&rsquo;s designed to <em>run the effect</em>. In the case of an error branch, our <code>.run()</code> method could be annotated with <code>throws</code>:</p>
+
+<pre><code class="language-swift">extension Coproduct where A: Error {
+    func run() throws -&gt; B {
+        switch self {
+        case let .left(error):
+            throw error
+        case let .right(value):
+            return value
+        }
+    }
+}
+</code></pre>
+
+<p>Going the opposite way, from a throwing function to a coproduct, is still possible but we need to erase the error type into an <code>AnyError</code>:</p>
+
+<pre><code class="language-swift">struct AnyError: Error {
+    let get: Error
+}
+
+extension Coproduct where A == AnyError {
+    static func from(throwing: () throws -&gt; B) -&gt; Coproduct&lt;A,B&gt; {
+        do {
+            return try .right(throwing())
+        }
+        catch let error {
+            return .left(AnyError.init(get: error))
+        }
+    }
+}
+</code></pre>
+
+<p>When we&rsquo;re in the &ldquo;coproduct world&rdquo; the single values are no longer accessible, unless we &ldquo;force unwrap&rdquo; them (asserting the existence of a specific branch): the case is similar with <code>Optional</code>, where we could force unwrap it with the <code>!</code> operator, and like with <code>Optional</code> we should <strong>never</strong> do that unless we&rsquo;re bound by a supernatural force (i.e., cocoa methods). The point of this whole article is that, for the majority of our program, we should operate within safe contexts, and then, at the <em>boundary</em>, run the effectful computations. This idea is highly related to the concepts expressed in the notorious <a href="https://www.destroyallsoftware.com/talks/boundaries">Boundaries</a> talk by <a href="https://twitter.com/garybernhardt">Gary Bernhardt</a>: if you never watched it, you&rsquo;d do a disservice to yourself if didn&rsquo;t watch it <em>right now</em>.</p>
+
+<h2 id="bonus-theory-a-whole-lot-of-jargon">Bonus Theory: a whole lot of jargon.</h2>
+
+<p>I purposely used the names <code>Product</code> and <code>Coproduct</code> to indicate the ADTs I talked about because they&rsquo;re not <em>familiar</em> in the context of software development. They&rsquo;re frequently used in the context of category theory, and I like them because they have a <em>precise</em> name that conveys clear meaning: a <em>product</em> of <em>A</em> and <em>B</em> is something that <em>contains both A and B</em>, and a <em>coproduct</em> is its <em>dual</em>, and being clear about an instance of duality between to types is, to me, extremely useful to unlock hidden properties that might not be apparent at a first look.</p>
+
+<p>In line with the category-theoretical approach, we can define a product in terms of its <em>projections</em>, i.e., the functions that, given a product, yield one of its components:</p>
+
+<pre><code class="language-swift">let first: (Product&lt;A,B&gt;) -&gt; A
+let second: (Product&lt;A,B&gt;) -&gt; B
+</code></pre>
+
+<p>These are of course the properties of a product if expressed as methods. An interesting way to write <code>Product&lt;A,B&gt;</code> is by using an operator to represent the idea:</p>
+
+<pre><code class="language-swift">Product&lt;A,B&gt; === A * B
+</code></pre>
+
+<p>The <code>*</code> operator indicates multiplication, as usual, but it&rsquo;s a multiplication <em>at the type level</em>. As stated above, the quintessential product is a <em>tuple</em> <code>(A,B)</code>, but as a &ldquo;nominal&rdquo; type, <code>Product&lt;A,B&gt;</code> is frequently called <code>Pair&lt;A,B&gt;</code>, and that&rsquo;s the first &ldquo;divergence&rdquo; from this essay and what&rsquo;s frequently found in literature, other articles or wikipedia.</p>
+
+<p>To express the dual type, we invert the relationships, ending up with <em>injections</em>:</p>
+
+<pre><code class="language-swift">let left: (A) -&gt; Coproduct&lt;A,B&gt;
+let right: (B) -&gt; Coproduct&lt;A,B&gt;
+</code></pre>
+
+<p>As we saw before, this is perfectly implemented by an <code>enum</code>. In <strong>type theory</strong> a coproduct is usually called <em>sum type</em>, and can be represent via the <code>+</code> operator:</p>
+
+<pre><code class="language-swift">Coproduct&lt;A,B&gt; === A + B
+</code></pre>
+
+<p>In set theory this is frequently referred as <em>tagged</em> or <em>discriminated</em> union, in the sense that the set represented by all possible instances of <code>A + B</code> contains all possible instances of <code>A</code> and all possible instances of <code>B</code>, even if <code>A</code> and <code>B</code> are equal; say they&rsquo;re both <code>Int</code>: <code>left(2)</code> and <code>right(2)</code> produce a <em>different</em> instance for <code>Int + Int</code>. Another divergence in names: I used <em>coproduct</em> to refer to <em>sum types</em> or <em>discriminated/tagged unions</em>, and I did it because I think that the category-theoretical approach is more informative and precise.</p>
+
+<p>In adding methods and utility functions to <code>Product&lt;A,B&gt;</code>, I purposely always talked about a &ldquo;product&rdquo;, but some types have a specific name for a reason: <a href="https://www.youtube.com/watch?v=pOl4E8x3fmw">denotational semantics</a> can help us infer <em>precise</em> meaning from the code. Broadly speaking, denotational semantics refer to the meaning (actual, precise meaning, with no effects on the side, and no surprises) of expressions written in code, like for example a <em>method call on a instance of a type, with some arguments</em>. To convey better meaning we can use specific names for specific types, and attach specific semantics to those types.</p>
+
+<p>First of all, <code>.map</code> is the fundamental composition method of a <a href="https://en.wikipedia.org/wiki/Functor"><code>Functor</code></a>. There&rsquo;s a lot to talk about (a to love) about functors, but that would be beyond the scope of this essay. Let&rsquo;s just say that <code>.map</code> must respect some laws to be meaningful:</p>
+
+<pre><code class="language-swift">let p: Functor&lt;A&gt; = ...
+
+/// law 1
+p.map { $0 } === p
+
+let f: (A) -&gt; B = ...
+let g: (B) -&gt; C = ...
+
+/// law 2
+p.map(f).map(g) === p.map { g(f($0)) }
+</code></pre>
+
+<p>These laws simply state that composition of functions is preserved when mapping. All the types I&rsquo;ve presented in this essay are functors, in some way or another. Specific types have different additional properties, though.</p>
+
+<p>For example, <code>Product&lt;A,B&gt;</code> with <code>.extend</code> and <code>.extract</code> as we used it the course of the article, can be referred to as a <code>Coreader&lt;A,B&gt;</code> <em>comonad</em> if we attach some <em>laws</em> to it that describe the way its instances behave; talking about the axioms - that must hold for a comonad to be called in such way - is beyond the scope of this article, but we can synthetically say that a <code>Coreader&lt;A,B&gt;</code> behaves if the following expressions are true:</p>
+
+<pre><code class="language-swift">let p: Coreader&lt;A,B&gt; = ...
+
+/// law 1
+p.extend { $0.extract } === p
+
+let f: (Coreader&lt;A,B&gt;) -&gt; C = ...
+
+/// law 2
+p.extend(f).extract == f(p)
+
+let g: (Coreader&lt;A,C&gt;) -&gt; D = ...
+
+/// law 3
+p.extend(f).extend(g) === p.extend { g($0.extend(f)) }
+</code></pre>
+
+<p>These laws are basically about making method composition <em>commute</em>, in the sense that two different compositions that should result in the same value <strong>shall</strong> result in the same value, and they force us to write methods like <code>.extend</code> and <code>.extract</code> in a <em>pure</em> way. For more about <code>Coreader</code> and its dual <code>Reader</code> (there was a <em>co-</em> there, so of course it was the dual of something) please watch <a href="https://www.youtube.com/watch?v=oPyqKETp3ks">this</a>.</p>
+
+<p>The other possible application we saw for <code>Product&lt;A,B&gt;</code> results in what&rsquo;s typically referred to as the <code>Writer&lt;A,B&gt;</code> <em>monad</em>, with a caveat: we needed to provide a way to &ldquo;combine contexts&rdquo; generically, and we ended up using an array, that combines pretty naturally just by concatenation. In general, we need that the <code>A</code> in <code>Writer&lt;A,B&gt;</code> is generically composable and has some <em>empty</em> instance that can be constructed with no arguments: these are the properties of a <code>Monoid</code>, and I talked about it <a href="https://broomburgo.github.io/fun-ios/post/on-abstraction/">in a previous post</a>.</p>
+
+<p><code>Writer&lt;A,B&gt;</code>, being a <em>monad</em>, has <code>.flatMap</code> and <code>.pure</code>, and there are some laws for those too:</p>
+
+<pre><code class="language-swift">let f: B -&gt; Writer&lt;A,C&gt; = ...
+let x: B = ...
+
+/// law 1
+Writer&lt;A,B&gt;.pure(x).flatMap(f) === f(x)
+
+let p: Writer&lt;A,B&gt; = ...
+
+/// law 2
+p.flatMap { Writer&lt;A,B&gt;.pure($0) } === p
+
+let g: C -&gt; Writer&lt;A,D&gt; = ...
+
+/// law 3
+p.flatMap(f).flatMap(g) === p.flatMap { f($0).flatMap(g) }
+</code></pre>
+
+<p>These laws exist for the same reason as those for the comonad, and insure that composition commutes without any weird effects related to the particular composition path we choose.</p>
+
+<p>Finally, <code>Coproduct&lt;A,B&gt;</code>, if we consider <code>.left</code> a failure case and <code>.right</code> the <em>happy path</em>, forms a monad (the <code>.pure</code> function in this case corresponds to <code>.right</code>) usually called <code>Either&lt;A,B&gt;</code>, or more recently (and I think, more correctly) <code>Result&lt;A,B&gt;</code>. It must follow the same identical composition laws, just switch <code>Writer</code> with <code>Result</code>.</p>
+
+<p>In the example with <code>Observable</code> we&rsquo;re not favoring a path over the other, and in fact we didn&rsquo;t use <code>.flatMap</code> for the <code>Coproduct</code>, but only <code>.map</code> and <code>.fold</code>: in fact, we distinguished <code>.mapLeft</code> and <code>.mapRight</code>. This makes <code>Coproduct&lt;A,B&gt;</code> a <em>bifunctor</em>, in the sense that it can be mapped in two ways. I didn&rsquo;t provide an example, but also <code>Product&lt;A,B&gt;</code> is a bifunctor when we&rsquo;re not considering any projection &ldquo;special&rdquo; in respect to the other.</p>
+
+<p>I wanted to avoid getting lost in jargon during the course of this essay, but there&rsquo;s value in calling things with their names: it unlocks amazing possibilities to share similar (sometimes, identical) concepts between different contexts, and provide a shared language for abstraction and composition.</p>
+
+<p>Until next time.</p>
+
+    </div>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container has-text-centered">
+    <p>&copy; <a href="https://github.com/broomburgo">Elviro Rocca</a> 2018</p>
+  </div>
+</section>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
+
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/languages/swift.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
