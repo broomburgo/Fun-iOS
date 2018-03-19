@@ -409,7 +409,7 @@ func • &lt;A,B,C&gt; (
 <pre><code class="language-swift">let buttonStateLens = LoginPage.lens.buttonState
 let processingPrism = ViewState&lt;Button&gt;.prism.processing
 
-let onProcessing = buttonStateLens.over • processingPrism.tryOver
+let onProcessing = buttonStateLens.modify • processingPrism.tryModify
 </code></pre>
 
 <p>From a completely generic standpoint, we&rsquo;re obtaining the <code>onProcessing</code> function with a composition like the following:</p>

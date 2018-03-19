@@ -386,7 +386,7 @@ The operator will simply apply both functions to a certain argument, one after t
 let buttonStateLens = LoginPage.lens.buttonState
 let processingPrism = ViewState<Button>.prism.processing
 
-let onProcessing = buttonStateLens.over • processingPrism.tryOver
+let onProcessing = buttonStateLens.modify • processingPrism.tryModify
 ```
 
 From a completely generic standpoint, we're obtaining the `onProcessing` function with a composition like the following:
