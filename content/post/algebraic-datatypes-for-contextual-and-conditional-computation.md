@@ -1,8 +1,8 @@
 +++
 title = "Algebraic data types for contextual and conditional computation"
-date = 2018-03-19T14:00:01+01:00
+date = 2018-03-19T15:00:01+01:00
 type = "post"
-draft = true
+draft = false
 +++
 
 An [algebraic data type](https://en.wikipedia.org/wiki/Algebraic_data_type) (**ADT** from now on) is a type (`class`, `struct`, `enum`, whatever the language allows us) that has no intrinsic semantics, and only exists for combining two or more other types in a specific way.
