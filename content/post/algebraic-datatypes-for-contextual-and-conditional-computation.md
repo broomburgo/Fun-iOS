@@ -84,7 +84,7 @@ So, if I give you a product it means that I'm giving you *two things* in a gener
 
 ## Contextual computation
 
-A classic use case for passing around two things instead of one is when we a have a *main* piece of information paired with some additional *context*. Suppose for example we want to transform a   set of goods into something suitable for the user who's currently in session, ordered by the user's preference; we could write a function like this:
+A classic use case for passing around two things instead of one is when we have a *main* piece of information paired with some additional *context*. Suppose for example we want to transform a   set of goods into something suitable for the user who's currently in session, ordered by the user's preference; we could write a function like this:
 
 ```swift
 func getPreferredGoods(from set: Set<Item>) -> List<Item> {
