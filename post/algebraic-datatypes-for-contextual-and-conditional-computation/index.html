@@ -123,7 +123,7 @@ func second&lt;A,B&gt;(_ product: Product&lt;A,B&gt;) -&gt; B {
 
 <h2 id="contextual-computation">Contextual computation</h2>
 
-<p>A classic use case for passing around two things instead of one is when we a have a <em>main</em> piece of information paired with some additional <em>context</em>. Suppose for example we want to transform a   set of goods into something suitable for the user who&rsquo;s currently in session, ordered by the user&rsquo;s preference; we could write a function like this:</p>
+<p>A classic use case for passing around two things instead of one is when we have a <em>main</em> piece of information paired with some additional <em>context</em>. Suppose for example we want to transform a   set of goods into something suitable for the user who&rsquo;s currently in session, ordered by the user&rsquo;s preference; we could write a function like this:</p>
 
 <pre><code class="language-swift">func getPreferredGoods(from set: Set&lt;Item&gt;) -&gt; List&lt;Item&gt; {
     /// implementation by using a &quot;global&quot; user
