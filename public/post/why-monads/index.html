@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Monads? | Fun iOS</title>
+<link rel="stylesheet" href="https://broomburgo.github.io/fun-ios//css/style.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/styles/github.min.css">
+
+
+    
+
+
+
+<section class="section">
+  <div class="container">
+    <nav class="nav">
+      <div class="nav-left">
+        <a class="nav-item" href="https://broomburgo.github.io/fun-ios/"><h1 class="title is-4">Fun iOS</h1></a>
+      </div>
+      <div class="nav-right">
+        <nav class="nav-item level is-mobile">
+          
+          <a class="level-item" href="https://github.com/broomburgo">
+            <span class="icon">
+              <i class="fa fa-github"></i>
+            </span>
+          </a>
+          
+          <a class="level-item" href="https://twitter.com/_logicist">
+            <span class="icon">
+              <i class="fa fa-twitter"></i>
+            </span>
+          </a>
+          
+        </nav>
+      </div>
+    </nav>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="subtitle is-6">July 30, 2018</h2>
+    <h1 class="title">Why Monads?</h1>
+    <div class="content">
+      
+
+<p>There&rsquo;s some talk going on in the <a href="https://forums.swift.org/t/higher-kinded-types-monads-functors-etc">Swift Forums</a> about whether it could be useful or not to add the notion of <a href="https://en.wikipedia.org/wiki/Kind_(type_theory)">Higher-Kinded Types</a> (from now on, HKTs) to the Swift&rsquo;s type system. This discussion has been going for a while in the Swift community, and there seems to be a lack of practical examples to sustain the need for such an advanced feature. Unfortunately, HKTs are in the area of things that become obvious if you have them and use them every day, but tend to remain obscure if you have to work without them: that&rsquo;s because HKTs can shift one&rsquo;s way of thinking about programming, abstractions and computation in general.</p>
+
+<p>Also, while <em>functors</em> or <em>monads</em> are HKTs, you don&rsquo;t need higher-kinded typing to design and implement types that behave like them: in languages that have HKTs a <code>Monad</code>, for example, is basically an interface, like a Swift <code>protocol</code>, with some extra power that Swift, at the present moment, cannot deliver. But you can implement the <code>Optional&lt;Wrapped&gt;</code> type in Swift, and work with it successfully, without knowing, nor needing to know, that <code>Optional&lt;Wrapped&gt;</code> is a monad. I happen to think that, if Swift had the notion of HKT in its type system – for example, if we could express the concept of <code>Monad</code> generically (maybe with some kind of protocol) - then we&rsquo;d be able to write practical, pragmatic, useful code that&rsquo;s only unlocked by the power of HKTs.</p>
+
+<p>In this article I&rsquo;m going to explore that usage of monads for practical code, and the power unlocked by their composition: in doing so, I&rsquo;m also going to give my personal introduction to monads, something that you can find by the dozen by googling &ldquo;monad introduction&rdquo;. There&rsquo;s really no point in linking other introductions here, for I want to try and give my own, and they&rsquo;re so easy to find; but I&rsquo;ll refer to a couple of resources that I consider particularly valuable, and helped me a lot at the time:</p>
+
+<ul>
+<li><a href="http://adit.io/posts/2013-04-17-functors,_applicatives,_and_monads_in_pictures.html">Functors, Applicatives, And Monads In Pictures</a>: a wonderful explanation of the basics of 3 important category-theoretical concepts when applied to programming;</li>
+<li><a href="https://www.youtube.com/watch?v=ZhuHCtR3xq8">Don&rsquo;t fear the Monad</a>: a lovely introduction to monads in which Brian Beckman traces a parallelism with the (even more) important concept of <em>Monoid</em>.</li>
+</ul>
+
+<p>I&rsquo;m also going to take the <code>Monoid</code> path to reach the <code>Monad</code> land, but in a different way; I&rsquo;d like to do so to also try and give an explanation why we use the word <em>monad</em>, that seems pointlessly abstract: while the concept of <code>Monoid</code> is inevitably so abstract that there really couldn&rsquo;t be a more &ldquo;descriptive name&rdquo; for it (like trying to give a more descriptive name to the concept of &ldquo;multiplication&rdquo;, you just learn it and move on), <code>Monad</code> is sometimes referred with more pragmatic-sounding names like &ldquo;flatmappable&rdquo; or &ldquo;chainable&rdquo;. While I certainly think that using less scary and more <em>interface-like</em> sounding names for abstract concepts can be useful (for example, I&rsquo;d probably give up the <em>functor</em> name, and use <em>mappable</em>), there are reasons why a monad is called like that and sounds like &ldquo;monoid&rdquo;, and I think that understanding those reasons could really reveal some deeper truths about why these abstractions are important.</p>
+
+<p>Let&rsquo;s start then. Brace yourselves.</p>
+
+<h2 id="why-monoids">Why Monoids?</h2>
+
+<p>I think that the concept of <a href="https://en.wikipedia.org/wiki/Monoid"><code>Monoid</code></a> is the single most important idea that percolated from abstract algebra to computation: actually, abstract algebra is usually more concerned with <a href="https://en.wikipedia.org/wiki/Group_(mathematics)">groups</a>, while monoids seem to be particularly useful in software development, at least in my experience. This article is about monads, and my goal is not really to talk about monoids, but the concepts are deeply related, and I think that an understanding of the properties and usefulness of monoids will help in truly understanding what monads are about.</p>
+
+<p><code>Monoid</code> encapsulates the idea of <em>merging two things together into a single one, with the possibility that one of those things is irrelevant</em>. For example, we concatenate strings: we take two strings, put them together, and generate a single string. This composition operation is <em>binary</em>, because it takes two and gives one. But if I&rsquo;m concatenating strings and I want to ignore one of them, a simple way is to just use an empty string: <code>&quot;Hello &quot;</code> plus <code>&quot;World!&quot;</code> gives <code>&quot;Hello World!&quot;</code>, but <code>&quot;Hello &quot;</code>  plus <code>&quot;&quot;</code>, or <code>&quot;&quot;</code> plus <code>&quot;World!&quot;</code> gives back the first or second string like if nothing happened. It turns out that <code>String</code> is a <code>Monoid</code> in respect to string concatenation, and the <em>irrelevant</em>, or <em>neutral</em>, instance (let&rsquo;s call it <code>empty</code>), that is, the empty string, is ignored in the composition operation.</p>
+
+<p>Another example is <code>Array&lt;Element&gt;</code>, in which again concatenation is the &ldquo;putting two things together&rdquo; operation, and an empty array is the neutral instance. Here&rsquo;s another one: <code>Bool</code> is a monoid, if we consider the <code>&amp;&amp;</code> (<em>AND</em>) operation, and the <code>true</code> instance. <strong>But</strong> <code>Bool</code> can <strong>also</strong> be a <code>Monoid</code> if we consider the <code>||</code> (<em>OR</em>) operation, and the <code>false</code> instance: what&rsquo;s going on here?</p>
+
+<p>Let&rsquo;s first give a more formal definition of a <code>Monoid</code> protocol, something that we can fully do in Swift right now:</p>
+
+<pre><code class="language-swift">protocol Monoid {
+    func append(_ other: Self) -&gt; Self
+    static var empty: Self { get }
+}
+</code></pre>
+
+<p>It&rsquo;s common for implementations based on abstract algebra to employ an operator in place of the <code>append</code> method, like the &ldquo;diamond&rdquo; <code>&lt;&gt;</code> operator; I&rsquo;m not a great fan of using operators in Swift because of slow compilation times (the type checker really can&rsquo;t stand too may concatenated operators), and in general I like to have at least the choice to use a method instead of an operator: there&rsquo;s a place for custom operators, but for now let&rsquo;s go with methods instead.</p>
+
+<p>Anyway, the <code>append</code> method takes another instance of <code>Self</code>, and combines it with the <code>self</code> instance, to get a new one: from two, we get one, so it represents a binary operation. Then, there&rsquo;s the <code>empty</code> static property, which is the &ldquo;neutral&rdquo; fixed one. There are 3 requirements for a type to properly conform to the <code>Monoid</code> protocol:</p>
+
+<ul>
+<li>the <code>append</code> method <strong>must be total</strong>: no preconditions, no fatal errors, nothing weird going on; if the method is called, it must not crash;</li>
+<li>the <code>append</code> operation must be <strong>associative</strong>, that is, <code>a.append(b).append(c)</code> must be exactly the same as <code>a.append(b.append(c))</code>, that is, however I put the parentheses, the final result is the same;</li>
+<li>the <code>empty</code> instance must be <strong>neutral</strong> in regard to the <code>append</code> operation, which means that <code>a.append(empty)</code> and <code>empty.append(a)</code> must be the same and exactly equal to just <code>a</code>.</li>
+</ul>
+
+<p>Notice that <code>append</code> has a generic-sounding name because <strong>it is</strong> completely generic: the meaning (semantics) of <code>append</code> will depend on the concrete type conforming to <code>Monoid</code>. Thus, <code>append</code> for <code>String</code> and <code>Array</code> will mean &ldquo;concatenation&rdquo;, which is associative. But what about <code>Bool</code>? Before dealing with that, let&rsquo;s try and understand why it makes sense to have this kind of protocol in the first place, with an example.</p>
+
+<p>Let&rsquo;s assume we have a current user session going within an app. The <code>Session</code> object could be represented by a couple of structs like the following:</p>
+
+<pre><code class="language-swift">struct UserSession {
+    var token: String?
+    var identity: UserIdentity
+}
+
+struct UserIdentity {
+    var identifier: String
+    var updatedAt: Date
+}
+</code></pre>
+
+<p>A session is identified by a token (initially, <code>nil</code>) that, when updated, is returned by a server on the next request; there&rsquo;s also an &ldquo;identity&rdquo;, characterized by an identifier and an update date (that&rsquo;s because we only ever care about the most recent identity). Both the token and the identity could be updated at any time, in response to a number of events.</p>
+
+<p>To handle the update, we could design an object that we pass around as a mutable dependency, with ad-hoc methods for the various manipulations. This way we centralize the manipulation, but we need to pass around a dependency, and &ldquo;expressing the update&rdquo; means really &ldquo;calling a method on some object&rdquo;, which will probably require the definition of an interface, some boilerplate, and a &ldquo;contract&rdquo; that will <a href="https://www.youtube.com/watch?v=rI8tNMsozo0">complect</a>, that is, bind together two contexts that shouldn&rsquo;t necessarily be related.</p>
+
+<p>Alternatively, we could <em>express</em> the kind of update we want to do with functions that operate on <code>UserSession</code>: this way we can declaratively produce these updates as functions of type <code>(UserSession) -&gt; UserSession</code>, that can be handled in a different context, and that&rsquo;s a huge win, but the function type doesn&rsquo;t carry any meaning by itself, and we&rsquo;ll need to rely on the function names to understand what&rsquo;s going on; also, in the context where these functions are called, there&rsquo;s no memory of what kind of update we&rsquo;re going to perform.</p>
+
+<p>These strategies have pros and cons, but are both characterized by a potentially crucial detail: the <code>UserSession</code> type <strong>in itself</strong> doesn&rsquo;t express the business logic related to its update. We could add methods (mutating or not) for expressing this logic, but these would be redundant and essentially duplicate some logic already expressed in both strategies. An interesting alternative could be to express the update logic <strong>at the type level</strong>: we could represent the way to update all parts of a <code>UserSession</code> with specific types. Then, when <em>merging</em> instances of those types, each one of them will express specific semantics of update.</p>
+
+<p>For example, we could design an <code>Update&lt;A&gt;</code> type for which the merge on two instances will <em>favor</em> the second of the two, while the <code>empty</code> instance will simply wrap <code>nil</code>:</p>
+
+<pre><code class="language-swift">struct Update&lt;A&gt;: Monoid {
+    let unwrap: A?
+    
+    init(_ value: A?) {
+        self.unwrap = value
+    }
+    
+    func append(_ other: Update&lt;A&gt;) -&gt; Update&lt;A&gt; {
+        return Update&lt;A&gt;(other.unwrap ?? self.unwrap)
+    }
+    
+    static var empty: Update&lt;A&gt; {
+        return Update&lt;A&gt;(nil)
+    }
+}
+</code></pre>
+
+<p>Equipped with this new type, we can redefine <code>UserSession</code> as follows:</p>
+
+<pre><code class="language-swift">struct UserSession {
+    var token: Update&lt;String&gt;
+    var identity: UserIdentity
+}
+</code></pre>
+
+<p>With this definition we&rsquo;re saying that the token is an <code>Optional&lt;String&gt;</code> that will update by simply discarding the previous one if the next one is not <code>nil</code>.</p>
+
+<p>For <code>UserIdentity</code> we can, on first approximation, give a custom implementation of <code>Monoid</code>.</p>
+
+<pre><code class="language-swift">extension UserIdentity: Monoid {
+    func append(_ other: UserIdentity) -&gt; UserIdentity {
+        if other.updatedAt &gt; self.updatedAt {
+            return other
+        } else {
+            return self
+        }
+    }
+    
+    static var empty: UserIdentity {
+        return UserIdentity.init(
+            identifier: &quot;&quot;,
+            updatedAt: .distantPast)
+    }
+}
+</code></pre>
+
+<p>In this case, the <code>append</code> method will favor the most recent <code>UserIdentity</code>, and the <code>empty</code> instance has <code>distantPast</code> as date, so it will never be selected in an <code>append</code> operation.</p>
+
+<p>Now that both the <code>token</code> and <code>identity</code> properties are monoids, we can trivially make the whole <code>UserSession</code> a <code>Monoid</code>, by simply updating both properties with the <code>append</code> method, and use both the <code>empty</code> static functions:</p>
+
+<pre><code class="language-swift">extension UserSession: Monoid {
+    func append(_ other: UserSession) -&gt; UserSession {
+        return UserSession.init(
+            token: self.token.append(other.token),
+            identity: self.identity.append(other.identity))
+    }
+    
+    static var empty: UserSession {
+        return UserSession.init(
+            token: .empty,
+            identity: .empty)
+    }
+}
+</code></pre>
+
+<p>Equipped with these definitions, something magical happens: any time we want to express an update in <code>UserSession</code>, we simply need to produce a new one. For example, if we&rsquo;re updating just the token, we can produce a new session with a new token, and an <code>empty</code> user identity; if we&rsquo;re updating the identity, we can just yield <code>nil</code> for the token, and we&rsquo;ll be sure that the most recent identity will be kept in any case.</p>
+
+<p>Interestingly, in an atomic process that contains multiple session updates, we can just collect all the updates (in order) and generate a single one in batch, with a <code>concatenated</code> method:</p>
+
+<pre><code class="language-swift">extension Sequence where Iterator.Element: Monoid {
+    func concatenated() -&gt; Iterator.Element {
+        return reduce(.empty) { $0.append($1) }
+    }
+}
+</code></pre>
+
+<p>Notice that this method doesn&rsquo;t know anything about the fact that <code>Iterator.Element</code> is a <code>UserSession</code>: it just needs to know that it&rsquo;s a <code>Monoid</code>, so it has <code>empty</code> and <code>append</code>.</p>
+
+<p>What about the <code>Bool</code> conundrum? Well, two different specific types will express the two ways of &ldquo;composing&rdquo; booleans, let&rsquo;s call them <code>And</code> and <code>Or</code>:</p>
+
+<pre><code class="language-swift">struct And: Monoid {
+    let unwrap: Bool
+    
+    init(_ value: Bool) {
+        self.unwrap = value
+    }
+
+    func append(_ other: And) -&gt; And {
+        return And(self.unwrap &amp;&amp; other.unwrap)
+    }
+    
+    static var empty: And {
+        return And(true)
+    }
+}
+
+struct Or: Monoid {
+    let unwrap: Bool
+    
+    init(_ value: Bool) {
+        self.unwrap = value
+    }
+
+    func append(_ other: Or) -&gt; Or {
+        return Or(self.unwrap || other.unwrap)
+    }
+    
+    static var empty: Or {
+        return Or(false)
+    }
+}
+</code></pre>
+
+<p>This might seem pointlessly complicated when confronted to simply use <code>&amp;&amp;</code> and <code>||</code>, and in this particular case it probably is, but I hope I&rsquo;ve made a compelling argument for using types that express specific semantics of binary composition. <code>And</code> and <code>Or</code> allow to embed boolean composition in the monoid framework, and by constructing types that embed binary, associative composition, a world of possibilities unfolds: what I&rsquo;ve shown here is just the tip of the iceberg.</p>
+
+<p>Like basic mathematical operations that eventually yield complex expressions, the mere act of merging two things together, resulting in a third thing of the same type, is a very basic operation that can unlock sophisticated abstractions constructed from simple tools. It all accounts to properly express our types in a way that favors combination; this way we don&rsquo;t need to define many ad-hoc methods, that could change over time and disrupt interfaces and contracts: expressing combination semantics at the type level is the <em>ultimate encapsulation strategy</em>.</p>
+
+<h2 id="from-instances-to-types">From instances to types</h2>
+
+<p>Monoids are about putting together instances of types: if a type conforms to the <code>Monoid</code> protocol, it means that we can merge two of its instances into a single instance of the same type, and that there exists a very specific instance that will act neutrally towards this composition. Now, here&rsquo;s the key question: can we do the same thing with <strong>types</strong>? What I mean is this: is there a way to express the <em>composition of types</em> in a monoid-like way? Notice that to be <em>monoidal</em>, the types should somehow share something (like instances of a monoid share the fact that they&rsquo;re of the same type), and there should exist some kind of <em>neutral type</em> in respect to their composition. But what <em>composition</em> might even mean for types?</p>
+
+<p>Well, an option could be using <a href="https://broomburgo.github.io/fun-ios/post/algebraic-datatypes-for-contextual-and-conditional-computation/"><em>algebraic data types</em></a>, like <code>Product&lt;A,B&gt;</code> to compose two concrete types: <code>Int</code> and <code>String</code> would compose into <code>Product&lt;Int,String&gt;</code>, but this is not the kind of composition we&rsquo;re talking about, because <code>Int</code>, <code>String</code> and <code>Product&lt;Int,String&gt;</code> are different, unrelated (well, not completely) types. This is not the monoidal composition we&rsquo;re looking for.</p>
+
+<p>What about <em>generic</em> types? At this point it&rsquo;s probably better to give a new definition, that is, <em>type constructor</em>. A type constructor, in general, is a mapping from one or more types to a constructed, final type: for example, a <em>unary</em> type constructor takes a single type and returns a new single type, different in general from the first one, but typically related. In Swift, type constructors are represented by <strong>generic types</strong>. Think about it: <code>Optional&lt;Wrapped&gt;</code>, for example, is a unary type constructor, because if I give it a type, say <code>String</code>, it will yield a specific type <code>Optional&lt;String&gt;</code>, while if I give it another, different type, say <code>Array&lt;Int&gt;</code>, it will yield another, specific, different type <code>Optional&lt;Array&lt;Int&gt;&gt;</code>. It turns out that a type constructor, that is, a generic type in Swift, has a monoidal representation. A type constructor could also be <em>binary</em>, like <code>Dictionary&lt;Key,Value&gt;</code>, or in general <em>n-ary</em>, but we&rsquo;re really only concerned with one of the generic parameters, fixing all the others: so, the monoidal representation will refer to only one of the type arguments (the generic parameters).</p>
+
+<p>The &ldquo;composition&rdquo; we&rsquo;re looking for here is the <em>nesting</em> of the same type constructor, like for example <code>Optional&lt;Optional&lt;Wrapped&gt;&gt;</code> or <code>Array&lt;Array&lt;Element&gt;&gt;</code>, or in general <code>Generic&lt;Generic&lt;A&gt;&gt;</code>: to be monoidal, this composition should yield a type identical to the initial, non-nested one; it should also define some <code>Generic&lt;A&gt;</code> <em>neutral</em> type; and it should respect the associativity and neutrality laws. To summarize, if a generic type has this kind of monoidal composition, it must define the following:</p>
+
+<ul>
+<li>an <em>append</em> mapping in the form of <code>Generic&lt;Generic&lt;A&gt;&gt; -&gt; Generic&lt;A&gt;</code>;</li>
+<li>a <em>neutral</em> element <code>Generic&lt;A&gt;</code>;</li>
+<li>the <em>append</em> mapping should be associative, that is, the path <code>Generic&lt;Generic&lt;Generic&lt;A&gt;&gt;&gt; -&gt; Generic&lt;Generic&lt;A&gt;&gt; -&gt; Generic&lt;A&gt;</code> should be the same whether we merge the first and the second first, or the second and the third first;</li>
+<li>the <em>neutral</em> element, if nested into a <code>Generic&lt;_&gt;</code>, or if we nest a <code>Generic&lt;A&gt;</code> into it, should merge into a <code>Generic&lt;A&gt;</code> without any change.</li>
+</ul>
+
+<p>If these four requirements hold, <code>Generic&lt;A&gt;</code> is a <strong>monad</strong>. Notice that we&rsquo;re really requiring the same things that we required for monoids, even if this time we&rsquo;re dealing with the nesting of generic types: if you think about it, you can see that it&rsquo;s still really about putting two things together to get a single one, and a neutral element towards this composition. This is also why <em>monad</em> and <em>monoid</em> sound similar: a monad is a monoid <em>lifted</em> into the world of type constructors.</p>
+
+<blockquote>
+<p>From a mathematical standpoint, monads are more generic than that, because they transcend the concept of <em>type</em> or <em>generics</em>, but we&rsquo;re interested in the representation of monads in Swift, and generic types provide that. Still, the monads we&rsquo;re talking about are more related to the monads in category theory than &ldquo;functors&rdquo; are; that&rsquo;s why I&rsquo;d keep the <em>monad</em> word, but lose <em>functor</em> in favor of <em>mappable</em>.</p>
+</blockquote>
+
+<p>Let&rsquo;s try and write some code to equip <code>Generic&lt;A&gt;</code> with monad features, and by doing that we&rsquo;ll express the <em>append</em> operation with a <code>joined</code> method (because we&rsquo;re joining a nested instance into a base one), and the <em>neutral</em> element with a <code>pure</code> method, that returns the &ldquo;purest&rdquo; instance possible for the type, the one that&rsquo;s going to be neutral towards joining:</p>
+
+<pre><code class="language-swift">extension Generic {
+    func joined &lt;T&gt; () -&gt; Generic&lt;T&gt; where A == Generic&lt;T&gt; {
+        /// some code
+    }
+ 
+    static func pure(_ value: A) -&gt; Generic&lt;A&gt; {
+        /// some code
+    }
+}
+</code></pre>
+
+<p>Unfortunately, in trying to give a practical representation in terms of Swift code of what a monad is about from an abstract standpoint (like in defining a <code>Monad</code> protocol), we hit a brick wall; we really can&rsquo;t do that in Swift, because as you can see, the <code>joined</code> method for <code>Generic&lt;A&gt;</code> returns a <code>Generic&lt;T&gt;</code>, that is, <strong>same</strong> type constructor, but <strong>different</strong> generic parameter: if we used <code>Self</code>, it would mean <code>Generic&lt;A&gt;</code> again, and we cannot write something like <code>Self&lt;T&gt;</code> in Swift. That&rsquo;s because we don&rsquo;t have HKTs in Swift, that is, what this article is really about. The fact that we cannot generically talk about monads in Swift code has many consequences: for now, I&rsquo;ll simply observe that things like <code>concatenated</code> for monoids is not expressible in Swift for monads, but in the rest of article we&rsquo;ll see a few practical examples of why this can be problematic.</p>
+
+<p>It&rsquo;s frequent to see monads expressed in terms of a <code>flatMap</code> or <code>bind</code> method, that for the generic type would have this kind of shape:</p>
+
+<pre><code class="language-swift">extension Generic {
+    func flatMap &lt;T&gt; (_ transform: (A) -&gt; Generic&lt;T&gt;) -&gt; Generic&lt;T&gt; {
+            /// some code
+    }
+}
+</code></pre>
+
+<p>This representation is frequently more useful, but it&rsquo;s completely equivalent to the <code>joined</code> method I presented before: to implement this, one can simply <code>map</code> and then <code>joined</code>. Or otherwise, one can implement <code>flatMap</code>, and then implement <code>joined</code> by passing <code>pure</code> to <code>flatMap</code>: as I said, the representation are equivalent. But mathematically, monads are defined in terms of the operation represented by <code>joined</code>, and the latter I think is more convenient to implement (because there&rsquo;s no transformation with an new parameter) and more rigorous.</p>
+
+<p>I can always <code>map</code> because a monad is always also a <em>functor</em>, that for us is simply <em>something that can be mapped, by respecting some rules</em>, and I don&rsquo;t really want to talk about functors right now, but we&rsquo;re going to need a tool, the <code>map</code> function, so let&rsquo;s get it out of the way and define it:</p>
+
+<pre><code class="language-swift">extension Generic {
+    func map &lt;T&gt; (_ transform: (A) -&gt; T) -&gt; Generic&lt;T&gt; {
+        /// some code
+    }
+}
+</code></pre>
+
+<p><code>map</code> transforms the <em>content</em> of the type, thus changing the generic parameter.</p>
+
+<h2 id="special-effects">Special effects</h2>
+
+<p>Up to this point I treated monads as a construction based on the nesting of a generic type, but I didn&rsquo;t present any practical use case for it. In iOS development (or any other, really) with Swift, we sometimes end up with nested generics, for example <code>Optional&lt;Optional&lt;Something&gt;&gt;</code> or <code>Array&lt;Array&lt;Something&gt;&gt;</code>; at the level of the standard library, the former case is not really handled in any sensible way: either a double <code>if/guard-let</code>, or a double <code>!</code> are required to extract the value nested inside; but the latter case is cleanly handled with a <code>joined</code> method, basically the same method the I defined for a monad, with the difference that it returns a more efficient <code>FlattenBidirectionalCollection&lt;[[Something]]&gt;</code> (that could be easily converted into an <code>Array</code> if needed). Efficiency on collections is a cornerstone of the Swift standard library, thus many types in it are designed to allow for fast conversions and iterations, but the <code>Element</code> of a <code>FlattenBidirectionalCollection&lt;[[Something]]&gt;</code> is <code>Something</code>, like in <code>Array&lt;Something&gt;</code>.</p>
+
+<p>For now we can observe that a <code>joined</code> method would make sense also for <code>Optional&lt;Optional&lt;Something&gt;&gt;</code>, with basically the same shape as <code>Array&lt;Array&lt;Something&gt;&gt;</code>: notice that the two implementations would be (and actually are) completely different, and they depend on the specific internal structure of the type. Now, are there more types for which this kind of operation would make sense? Let&rsquo;s consider for example the following class:</p>
+
+<pre><code class="language-swift">protocol HasCalories {
+    var calories: Int { get }
+}
+
+class Animal&lt;Food&gt; where Food: HasCalories {
+    func consume(_ food: Food) {
+        /// some code
+    }
+
+    var consumedCalories: Int {
+        /// some code
+    }
+}
+</code></pre>
+
+<p>The <code>Animal</code> class is parameterized over the <code>Food</code> eaten, and <code>Food</code> can be anything that <code>HasCalories</code>. If we nest the generics we get <code>Animal&lt;Animal&lt;SomeFood&gt;&gt;</code>, that is, an animal that eats animals that eat <code>SomeFood</code>: if we <code>joined</code> this, we would get <code>Animal&lt;SomeFood&gt;</code>, but what does it even mean? Is this animal eating <code>SomeFood</code>, or other animals? The <code>joined</code> operation is not something that you would do for every generic type. Here&rsquo;s another example: we could easily write a <code>joined</code> function on <code>Dictionary&lt;Key,Dictionary&lt;Key,SomeValue&gt;&gt;</code> to get <code>Dictionary&lt;Key,SomeValue&gt;</code>, but it wouldn&rsquo;t make any sense, because we would merge all the subdictionaries – in case of identical keys, some values would have precedence, so we&rsquo;d lose the other ones – and we would probably lose some of the original keys.</p>
+
+<p>It turns out that there are specific categories of generic types where the &ldquo;joining&rdquo; operation makes sense, and it&rsquo;s actually useful: types that represent <em>effects</em>. To my knowledge, there&rsquo;s no shared, widely adopted and authoritative source on the concept of <em>effect</em> in programming, in the sense that it eventually <em>becomes clear</em> in one&rsquo;s mind, but I wasn&rsquo;t able to find a straightforward clear-cut definition. An <em>effect</em> in programming and computation in general is any consequence of an operation that doesn&rsquo;t yield a direct informational value. For example, a simple division of <code>Double</code>s seem a straightforward operation, with nothing weird going on, but if we implement the function we discover that the reality is not that simple:</p>
+
+<pre><code class="language-swift">func divide(_ dividend: Double, by divisor: Double) -&gt; Double {
+    guard divisor != 0 else {
+        fatalError(&quot;Cannot divide by zero&quot;)
+    }
+    
+    return dividend/divisor
+}
+</code></pre>
+
+<p>As you can see, this function crashes if we pass <code>0</code> as divisor: this means that the function is not <em>pure</em>, the function is <strong>partial</strong>, it doesn&rsquo;t just produce a straightforward informational value (the result of the division) even if the signature says so. There&rsquo;s an <em>effect</em> going on here, and I could ignore this and risk crashing, or I could leverage the Swift type system to somehow <em>encapsulate</em> the precondition, and go back to a pure function. Of course Swift has already a way to deal with this, the <code>Optional&lt;Wrapped&gt;</code> type:</p>
+
+<pre><code class="language-swift">func divide(_ dividend: Double, by divisor: Double) -&gt; Double? {
+    guard divisor != 0 else {
+        return nil
+    }
+
+    return dividend/divisor
+}
+</code></pre>
+
+<p>Now the function signature says it all: the operation could fail, so I&rsquo;m returning an <code>Optional&lt;Double&gt;</code>. This is a pure, straightforward function, that expresses its <em>effect</em> (that is, <em>partiality</em>) clearly.</p>
+
+<p>What if I want to divide twice? Something like <code>divide(divide(42, by: 28), by: 21)</code> wouldn&rsquo;t compile, because the external <code>divide</code> (that&rsquo;s executed second) requires a <code>Double</code> dividend, but I&rsquo;m providing a <code>Optional&lt;Double&gt;</code>. The solution is simple, and Swift has already a way to deal with this in the standard library:</p>
+
+<pre><code class="language-swift">divide(42, by: 28)
+    .flatMap { divide($0, by: 21) }
+</code></pre>
+
+<p><code>flatMap</code> <em>chains</em> the two effects together. With a <code>joined</code> method, I could do the same more explicitly:</p>
+
+<pre><code class="language-swift">divide(42, by: 28) /// yields Optional&lt;Bool&gt;
+    .map { divide($0, by: 21) } /// yields Optional&lt;Optional&lt;Bool&gt;&gt;
+    .joined() /// yields Optional&lt;Bool&gt;
+</code></pre>
+
+<p>As you can see, <code>flatMap</code> is generally more convenient to use, and that&rsquo;s why you usually find something like that in standard libraries: but we shouldn&rsquo;t forget where the concept comes from, that is, nesting multiple effects into a single one.</p>
+
+<p>An implementation of <code>joined</code> for <code>Optional&lt;Wrapped&gt;</code> looks like this:</p>
+
+<pre><code class="language-swift">extension Optional {
+    func joined &lt;T&gt; () -&gt; Optional&lt;T&gt; where Wrapped == Optional&lt;T&gt; {
+        switch self {
+        case .none:
+            return .none
+        case let .some(value):
+            return value
+        }
+    }
+}
+</code></pre>
+
+<p>Notice that to make this work we need to <em>enter into</em> the <code>Optional</code>, navigate the structure, and produce the result. This code works for <code>Optional&lt;Wrapped&gt;</code>, so the implementation of a <code>joined</code> will ultimately depend on the effect involved.</p>
+
+<p><code>Array&lt;Element&gt;</code> is <strong>also</strong> a particular kind of effect: it models <em>non-deterministic</em> computation, where the result of some process can be one of many (even none), and in moving the computation forward, we should take into account all the possible values. When <em>flattening</em> an array of arrays, we need to navigate it, thus taking into account the effect that it represents thanks to a specific knowledge of its structure. Of course arrays are not generally used for this reason, but they could model this kind of computation if needed, so they can represent this <em>effect</em>.</p>
+
+<p>An effect cannot be <em>unwrapped</em> or <em>executed</em> easily, at least in principle: for example, force-unwrapping an optional value can result into a crash. The monadic definition allows to represent the execution of effects in a safe and incapsulated way, thanks to the nesting of generics, and their flattening. The fact that we&rsquo;re remaining in the monadic context means that we can execute the effects <em>safely</em>, as a pure operation. For example, we&rsquo;ve already seen that an operation like <code>(Optional&lt;Int&gt;) -&gt; Int</code> is <strong>not pure</strong>, because either we pull numbers out of a hat, or we need to force unwrap; but if instead of <code>Int</code> we had <code>Optional&lt;Int&gt;</code> again, the operation <code>(Optional&lt;Optional&lt;Int&gt;&gt;) -&gt; Optional&lt;Int&gt;</code> could be performed safely, and it would be <strong>pure</strong>, so it&rsquo;s a completely different situation, even if it looks like the previous one: the fact that <code>Optional&lt;Wrapped&gt;</code> is a monad makes this possible.</p>
+
+<h2 id="the-m-word-is-here-to-stay">The M word is here to stay</h2>
+
+<p>Effects are wild beasts, and using them makes understanding programs really hard, but we literally cannot do anything useful without effects, not even a simple division. It might feel like I&rsquo;m repeating myself over and over again, but I really want to stress out this point: monads help with effects, because they allow to execute them safely within a particular context, and this is the case because <code>joined</code> is a pure operation. Here&rsquo;s a simple example, that will show a more direct relation between monads and effects, and will allow for the introduction of another monad: the <code>Effect&lt;Value&gt;</code> type.</p>
+
+<p>The <code>Effect&lt;Value&gt;</code> type, also called <em>IO</em>, represents an <em>effectful</em> computation that produces an instance of type <code>Value</code>. It basically incapsulates a function of type <code>() -&gt; Value</code>: because <code>Value</code> can be any type, and we have no information about it, it&rsquo;s completely impossible for this function to be <em>pure</em>. A function of type <code>() -&gt; Int</code> <em>could be</em> pure, if for example always returned the number <code>42</code>, but that&rsquo;s just because we know the characteristics of the returned value&rsquo;s type: but if the returned type is completely generic, there&rsquo;s no way a function that takes <em>nothing</em> - actually, <code>()</code>, which is more like a <em>singleton</em>, traditionally, but quite erroneously called <code>Void</code> - returns <em>something</em>. But then, if I wanted to write to a function that returns a value of type <code>Value</code> taken from a globally mutable context (like a global variable), I could do it with a function of type <code>() -&gt; Value</code> by referring the mutable context from within the body of the function. Another case could be executing some side effect on an external context (like persisting data), in which case I could use an even simpler function of type <code>() -&gt; ()</code> (thus, an <code>Effect&lt;()&gt;</code>),</p>
+
+<p>Here&rsquo;s a very basic, very obvious implementation of <code>Effect&lt;Value&gt;</code>:</p>
+
+<pre><code class="language-swift">struct Effect&lt;Value&gt; {
+    private let call: () -&gt; Value
+    init(_ call: @escaping () -&gt; Value) {
+        self.call = call
+    }
+    
+    func execute() -&gt; Value {
+        return call()
+    }
+}
+</code></pre>
+
+<p>Of course calling <code>execute</code> on the effect will not be pure, and it&rsquo;s something we&rsquo;d like to do in a protected context. But <code>Effect&lt;Value&gt;</code> has a monad representation, that can be implemented in the following way:</p>
+
+<pre><code class="language-swift">extension Effect {
+    static func pure(_ value: Value) -&gt; Effect {
+        return Effect.init { value }
+    }
+
+    func joined &lt;A&gt; () -&gt; Effect&lt;A&gt; where Value == Effect&lt;A&gt; {
+        return Effect&lt;A&gt;.init {
+            self.execute().execute()
+        }
+    }
+}
+</code></pre>
+
+<p>Within the <code>joined</code> function we don&rsquo;t call the <code>execute</code> method, so no effect is executed: we literally just return a new effect, the computation is pure. But <code>joined</code> will <em>simplify</em> a nested effect, with the macroscopic result of an execution, because it would go from <code>Effect&lt;Effect&lt;Value&gt;&gt;</code> to <code>Effect&lt;Value&gt;</code>.</p>
+
+<p>At this point I think we understood fairly well why the abstract structure called &ldquo;monad&rdquo; can be useful in effectful computation; monads show <strong>in mathematics</strong> the equivalence of a particular <em>nested</em> structure to an <em>non-nested</em> one (given some laws are respected). Then we map this <em>nesting</em> into generic types et voilà: we get effectful computations that, within a certain context, magically become pure. I&rsquo;m not sure I can explain the idea any better than that: this is what a monad is about, this is why it sounds like <em>monoid</em>, and this is why I think that <em>monad</em> is an appropriate word for representing this concept: it&rsquo;s like &ldquo;multiplication&rdquo;, you just learn it and move on. So let&rsquo;s move on.</p>
+
+<h2 id="how-can-i-hold-all-these-monads">How can I hold all these monads?</h2>
+
+<p>In this piece I&rsquo;m not particularly interested in listing a bunch of useful monads in current use: there aren&rsquo;t many, and they mostly reflect the original <a href="https://www.disi.unige.it/person/MoggiE/ftp/ic91.pdf">Eugenio Moggi&rsquo;s dissertation</a> about using monads to represent effectful computations. You can find many articles about useful monads on the web, <a href="http://adit.io/posts/2013-06-10-three-useful-monads.html">here&rsquo;s one</a> for example. Let me just produce another one here, that&rsquo;s going to be useful for a practical example, the <code>State&lt;Environment,Value&gt;</code> monad:</p>
+
+<pre><code class="language-swift">struct State&lt;Environment,Value&gt; {
+    private let call: (Environment) -&gt; (Environment, Value)
+    init(_ call: @escaping (Environment) -&gt; (Environment, Value)) {
+        self.call = call
+    }
+
+    func run(_ environment: Environment) -&gt; (Environment, Value) {
+        return call(environment)
+    }
+}
+</code></pre>
+
+<p><code>State&lt;Environment,Value&gt;</code> encapsulates a function of type <code>(Environment) -&gt; (Environment, Value)</code>: this shape of function is useful if we want to produce some value given a certain contex (the <code>Environment</code> parameter) and also want to <em>modify</em> the context in some way. Now, <code>State&lt;Environment,Value&gt;</code> is a monad and we can provide the two defining functions for it:</p>
+
+<pre><code class="language-swift">extension State {
+    static func pure(_ value: Value) -&gt; State {
+        return State.init { e in (e, value) }
+    }
+
+    func joined &lt;A&gt; () -&gt; State&lt;Environment, A&gt; where Value == State&lt;Environment, A&gt; {
+        return State&lt;Environment, A&gt;.init { m in
+            let (m1,sub) = self.run(m)
+            let (m2,p) = sub.run(m1)
+            return (m2,p)
+        }
+    }
+}
+</code></pre>
+
+<p>Notice that <code>State&lt;Environment,Value&gt;</code> is monadic in the <code>Value</code> parameter: that&rsquo;s the parameter passed to pure, and the nesting solved by <code>joined</code> is for a <code>State&lt;Environment,State&lt;Environment,Value&gt;&gt;</code> type, where the <code>Environment</code> <strong>must be the same</strong>, and the nesting is about putting another <code>State&lt;Environment,Value&gt;</code> in place of the <code>Value</code> of the first.</p>
+
+<p>For example, we could have a list of objects of type <code>User</code> as the environment, and we&rsquo;d want to represent a query on that list that retrieves a user and <strong>deletes it</strong> from the list, thus modifying the list itself. We&rsquo;re tempted to represent this operation with <code>State&lt;[User],User&gt;</code> but we&rsquo;re forced to allow the possibility that a <code>User</code> for a particular query might not be there, so a more appropriate representation would be <code>State&lt;[User],Optional&lt;User&gt;&gt;</code>. This is interesting because it&rsquo;s a kind of nesting of monads, but a different one: we&rsquo;re nesting the <em>optional</em> monad within the <em>state</em> monad. This <strong>cannot</strong> be joined, and this is one of the reasons why you often read that <em>monads don&rsquo;t compose</em>. But if we treated <code>State&lt;[User],Optional&lt;User&gt;&gt;</code> as a whole monad in itself (like we manufactured a new one), then it turns out that we could somehow <em>join</em> this: its nested representation would be something like <code>State&lt;[User],Optional&lt;State&lt;[User],Optional&lt;User&gt;&gt;&gt;&gt;</code>, which is hard to read, but kind of simple to understand: suppose that we wanted to perform a query on <code>[User]</code> that required information from another <code>User</code>; we do the first query, get the <code>User</code> (maybe, for it could be <code>nil</code>) then perform the second one with some information from the first. But of course we&rsquo;d like to represent this with a single instance of <code>State&lt;[User],Optional&lt;User&gt;&gt;</code> that we can simply <code>run</code>. Is there a way to write a <code>joined</code> function that worked this way? Of course there is, and let&rsquo;s call it <code>joinedT</code> to not confuse it:</p>
+
+<pre><code class="language-swift">extension State {
+    func joinedT &lt;A&gt; () -&gt; State&lt;Environment, Optional&lt;A&gt;&gt; where Value == Optional&lt;State&lt;Environment, Optional&lt;A&gt;&gt;&gt; {
+
+        return self
+            .map { value -&gt; State&lt;Environment, Optional&lt;A&gt;&gt; in
+                switch value {
+                case let .some(innerValue):
+                    return innerValue
+                case .none:
+                    return .pure(nil)
+                }
+            }
+            .joined()
+    }
+}
+</code></pre>
+
+<p>We also needed to add a <code>map</code> function to <code>State</code> to make it work but it&rsquo;s not a big deal; as already said, every monad is also a functor (or <em>mappable</em> if you prefer):</p>
+
+<pre><code class="language-swift">extension State {
+    func map &lt;A&gt; (_ transform: @escaping (Value) -&gt; A) -&gt; State&lt;Environment, A&gt; {
+        return State&lt;Environment, A&gt;.init { e in
+            let (newE, p) = self.run(e)
+            return (newE, transform(p))
+        }
+    }
+}
+</code></pre>
+
+<p>Now, there are a few interesting things about the <code>joinedT</code> function, and here&rsquo;s the two most relevant for me:</p>
+
+<ul>
+<li>we took advantage of the knowledge of the particular structure of <code>Optional&lt;Wrapped&gt;</code> to make it work (we&rsquo;re switching over its cases);</li>
+<li>the only methods that we call on the root instance of the state monad are <code>map</code>, <code>pure</code> and <code>joined</code>.</li>
+</ul>
+
+<p>The first point means that to do this particular operation we need to know the structure of the <em>internal</em> type, and this is kind of expected; but the second point is crucial: <em>we don&rsquo;t care</em> about the fact that the external type is a state monad, we only care about the fact that <strong>it&rsquo;s a monad</strong>. Here&rsquo;s the same implementation of <code>joinedT</code> for <code>Effect&lt;Optional&lt;Value&gt;&gt;</code> (providing <code>map</code> for <code>Effect&lt;Value&gt;</code>):</p>
+
+<pre><code class="language-swift">extension Effect {
+    func map &lt;A&gt; (_ transform: @escaping (Value) -&gt; A) -&gt; Effect&lt;A&gt; {
+        return Effect&lt;A&gt;.init {
+            transform(self.execute())
+        }
+    }
+
+    func joinedT &lt;A&gt; () -&gt; Effect&lt;Optional&lt;A&gt;&gt; where Value == Optional&lt;Effect&lt;Optional&lt;A&gt;&gt;&gt; {
+        return self
+            .map { value -&gt; Effect&lt;Optional&lt;A&gt;&gt; in
+                switch value {
+                case let .some(innerValue):
+                    return innerValue
+                case .none:
+                    return .pure(nil)
+                }
+            }
+            .joined()
+    }
+}
+</code></pre>
+
+<p>The implementation of <code>joinedT</code> is <strong>identical</strong>, save for the different types on the function signature. Again, we only care about the fact the <code>Effect&lt;Value&gt;</code> is a monad.</p>
+
+<p>Here&rsquo;s the implementation of <code>joinedT</code> for <code>Array&lt;Optional&lt;Element&gt;&gt;</code> (providing a <code>pure</code> function for <code>Array</code>):</p>
+
+<pre><code class="language-swift">extension Array {
+    static func pure(_ value: Element) -&gt; [Element] {
+        return [value]
+    }
+
+    func joinedT &lt;A&gt; () -&gt; FlattenBidirectionalCollection&lt;[[Optional&lt;A&gt;]]&gt; where Element == Optional&lt;Array&lt;Optional&lt;A&gt;&gt;&gt; {
+        return self
+            .map { value -&gt; Array&lt;Optional&lt;A&gt;&gt; in
+                switch value {
+                case let .some(innerValue):
+                    return innerValue
+                case .none:
+                    return .pure(nil)
+                }
+            }
+            .joined()
+    }
+}
+</code></pre>
+
+<p>The type is a little different here, because <code>joined</code> on a array returns a <code>FlattenBidirectionalCollection</code>, but the type could be made conform to the others with a different overload of <code>joined</code>. We&rsquo;re still only calling <code>map</code>, <code>pure</code> and <code>joined</code> on the base type, which simply requires that the base type be a monad.</p>
+
+<p>To mix the things up a bit, here&rsquo;s the implementation of <code>joinedT</code> for <code>Effect&lt;Array&lt;Value&gt;&gt;</code>:</p>
+
+<pre><code class="language-swift">extension Effect {
+    func joinedT &lt;A&gt; () -&gt; Effect&lt;Array&lt;A&gt;&gt; where Value == Array&lt;Effect&lt;Array&lt;A&gt;&gt;&gt; {
+        return self
+            .map { value -&gt; Effect&lt;Array&lt;A&gt;&gt; in
+                value.reduce(.pure([])) { accumulation, element in
+                    accumulation
+                        .map { acc in element
+                            .map { ele in
+                                acc + ele
+                            }
+                        }
+                        .joined()
+                }
+            }
+            .joined()
+    }
+}
+</code></pre>
+
+<p>The implementation is different because now the internal type is an array, and we need to take into account its particular structure: but on the base type, <code>Effect&lt;Value&gt;</code>, we&rsquo;re still only calling <code>map</code>, <code>pure</code> and <code>joined</code>.</p>
+
+<p>What about <code>pure</code>? Does it compose? Yes, and trivially:</p>
+
+<pre><code class="language-swift">extension Effect {
+    static func pureT &lt;A&gt; (_ value: A) -&gt; Effect&lt;Array&lt;A&gt;&gt; where Value == Array&lt;Effect&lt;Array&lt;A&gt;&gt;&gt; {
+        return .pure(.pure(value))
+    }
+}
+</code></pre>
+
+<p>We just call <code>pure</code> within <code>pure</code>. We can actually do the same with <code>map</code>, producing <code>mapT</code>, also trivially:</p>
+
+<pre><code class="language-swift">extension Effect {
+    func mapT &lt;A,B&gt; (_ transform: @escaping (A) -&gt; B) -&gt; Effect&lt;Optional&lt;B&gt;&gt; where Value == Optional&lt;A&gt; {
+        return map { $0.map(transform) }
+    }
+}
+</code></pre>
+
+<p>I could go on indefinitely, but I think I made my point: it&rsquo;s true that monads don&rsquo;t strictly compose, but we can operate with different nested monads like we operated on simple monads, with functions that work exactly like those of the latter. As we saw, the only requirement at the implementation level is that the base type has the <code>pure</code>, <code>map</code> and <code>joined</code> methods. This sounds like a <em>protocol extension</em> to me!</p>
+
+<p>If we had a <code>Monad</code> protocol, that had an <code>associatedtype</code> representing the <em>monadic</em> parameter (let&rsquo;s call it <code>ParameterType</code>), and declared the <code>pure</code>, <code>map</code> and <code>joined</code> methods, we could extend the protocol with a constraint on the <code>ParameterType</code> to be some other type, and we would take into consideration the particular structure of the latter, considering that we&rsquo;ll simply need to call <code>pure</code>, <code>map</code> and <code>joined</code> on the base monad.</p>
+
+<p>Unfortunately, we cannot do this in Swift, and this is heart of the matter.</p>
+
+<h2 id="can-we-go-higher">Can we go higher?</h2>
+
+<p>As an exercise, try and write a <code>Monad</code> protocol: you can easily add the <code>pure</code> function, but when you go into <code>joined</code>, something strange happens. The return type of <code>joined</code> must be <code>Self</code> somehow, but it&rsquo;s a little different from actual <code>Self</code>, because it should have a different associated type:</p>
+
+<pre><code class="language-swift">protocol Monad {
+    associatedtype ParameterType
+
+    static func pure(_ value: ParameterType) -&gt; Self
+
+    /// this won't compile: Self&lt;A&gt; is a meaningless term
+    func joined &lt;A&gt; () -&gt; Self&lt;A&gt; where ParameterType == Self&lt;A&gt;
+}
+</code></pre>
+
+<p>We would like to express the idea that the return type must be of the same concrete type of the instance we call <code>joined</code> on, but with a different generic parameter (or, in other words, the <code>associatedtype</code> should be different). But we can&rsquo;t do this!</p>
+
+<p>The <code>kind</code> of a type represents the <em>shape</em> of its constructor; for example, a normal generic type like <code>Optional&lt;Wrapped&gt;</code> has a kind represented by the expression <code>* -&gt; *</code>: this means that we can construct an optional type by providing some concrete type (the input <code>*</code>) and thus forming another concrete type (the output <code>*</code>). In the case of <code>Optional&lt;Wrapped&gt;</code>, if we provided <code>Int</code> as the <em>input type</em> we would get <code>Optional&lt;Int&gt;</code>, a concrete type, that&rsquo;s not generic anymore, as the <em>output type</em>. So, a particular generic type like <code>Optional&lt;Wrapped&gt;</code> has kind <code>* -&gt; *</code>. In general, a protocol with an <code>associatedtype</code> represents a type of the kind <code>* -&gt; *</code> because it takes some type (the one associated to it) and produces a concrete type represented by <code>Self</code>. What&rsquo;s the kind of a <code>Monad</code>? It&rsquo;s actually <code>* -&gt; * -&gt; *</code>, which means that there&rsquo;s another input type involved in the process of defining the final concrete type: this is the <em>base</em> type, that could be any type with a generic parameter. That&rsquo;s what HKT means: the kind <code>* -&gt; * -&gt; *</code> is <strong>higher</strong> than <code>* -&gt; *</code></p>
+
+<p>I guess the case might be clearer if we considered a possible example, in pseudo-Swift:</p>
+
+<pre><code class="language-swift">/// pseudo-Swift
+protocol Monad {
+    basetype Self&lt;_&gt;
+    associatedtype ParameterType
+    
+    static func pure(_ value: ParameterType) -&gt; Self&lt;ParameterType&gt;
+    
+    func joined &lt;A&gt; () -&gt; Self&lt;A&gt; where ParameterType == Self&lt;A&gt;
+}
+</code></pre>
+
+<p>The declaration <code>basetype Self&lt;_&gt;</code> means that the type has a generic parameter, and we want to abstract over the <code>Self&lt;_&gt;</code> type constructor, by directly referring to it. A possible extension for <code>Optional&lt;Wrapped&gt;</code> would be like the following:</p>
+
+<pre><code class="language-swift">/// pseudo-Swift
+extension Optional: Monad {
+    typealias Self&lt;_&gt; = Optional&lt;_&gt;
+    typealias ParameterType = Wrapped
+    
+    static func pure(_ value: Wrapped) -&gt; Optional&lt;Wrapped&gt; {
+        /// some code
+    }
+    
+    func joined &lt;A&gt; () -&gt; Optional&lt;A&gt; where Wrapped == Optional&lt;A&gt; {
+        /// some code
+    }
+}
+</code></pre>
+
+<p>This is just an example - I&rsquo;m not proposing this particular syntax - but I think it shows what would practically mean to represent a type constructor of kind <code>* -&gt; * -&gt; *</code>.</p>
+
+<p>It&rsquo;s not possible to represent this kind of abstraction in Swift, and it&rsquo;s a shame: as we saw with the nested monads example, we could leverage the semantic power given by combining monads without having to specify the base type, by simply extending the <code>Monad</code> protocol with different implementations of <code>pureT</code> and <code>joinedT</code> based on the concrete associated type, like for example in the following (the last pseudo-Swift bit for now):</p>
+
+<pre><code class="language-swift">/// pseudo-Swift
+extension Monad {
+    static func pureT &lt;A&gt; (_ value: A) -&gt; Self&lt;Optional&lt;A&gt;&gt; where Value == Optional&lt;Self&lt;Optional&lt;A&gt;&gt;&gt; {
+        return .pure(.pure(value))
+    }
+
+    func joinedT &lt;A&gt; () -&gt; Self&lt;Optional&lt;A&gt;&gt; where Value == Optional&lt;Self&lt;Optional&lt;A&gt;&gt;&gt; {
+        return self
+            .map { value -&gt; Self&lt;Optional&lt;A&gt;&gt; in
+                switch value {
+                case let .some(innerValue):
+                    return innerValue
+                case .none:
+                    return .pure(nil)
+                }
+            }
+            .joined()
+    }
+}
+</code></pre>
+
+<p>This code would be valid for any monad with a nested optional.</p>
+
+<p>I&rsquo;d like to make another practical example to show the power of combining monads, by introducing another couple of useful ones:</p>
+
+<ul>
+<li><code>Future&lt;Value&gt;</code>: it&rsquo;s used to model the effect related to producing a value at some point in the future or, in other words, manipulating a value that&rsquo;s not yet available; where <code>Effect&lt;Value&gt;</code> is executed with a simple <code>execute</code> method that returns a value immediately, the <code>Future&lt;Value&gt;</code> effect is executed by passing a <em>handler</em> function of type <code>(Value) -&gt; ()</code>, that will be called once the value is available: in this sense, <code>Future&lt;Value&gt;</code> models the concept of <a href="https://en.wikipedia.org/wiki/Continuation">continuation</a> or asynchronous calls in general.</li>
+<li><code>Result&lt;Failure,Value&gt;</code>: it&rsquo;s used to model a computation that can fail, with some additional information attached to the failure, represented by the <code>Failure</code> type; it works similarly to <code>Optional&lt;Wrapped&gt;</code>, but we get an instance of <code>Failure</code> instead of just <code>nil</code>; Swift natively represents this with the concept of <em>throwing function</em>, but <code>Result&lt;Failure,Value&gt;</code> is much more powerful for a number of reasons:
+
+<ul>
+<li>it&rsquo;s a nominal type, so it can have methods and produce valid instances;</li>
+<li>it carries information about the type of the error produced,  while still capable of being made adequately ergonomic with an <code>AnyError</code> container, the possibility to map the <code>Failure</code> part and many compositional utilities, for example when dealing with many failable operations at the same time;</li>
+<li>it&rsquo;s intrinsically more composable: for example, it can be passed as the input to a function, with no friction.</li>
+</ul></li>
+</ul>
+
+<p>Thus, <code>Future&lt;Value&gt;</code> makes for asynchronous calls, like HTTP requests for example, and they can usually fail to produce a valid <code>Value</code>, by providing some error instead: this seems the perfect case for nesting a monad into another, because we can represent the possibility of failure with the <code>Result&lt;Failure,Value&gt;</code> monad, producing finally a <code>Future&lt;Result&lt;Failure,Value&gt;&gt;</code> type. For this type, everything we said about <code>pureT</code> and <code>joinedT</code> is still valid, and this case could be even more relevant, because it&rsquo;s frequent that we need to <em>chain</em> together more asynchronous calls, where the latter depends on the result of the former.</p>
+
+<p>Again, I&rsquo;m not interested in talking about the single monads: they&rsquo;re useful per se, and we don&rsquo;t need the notion of HKT to use them; but their composition is exponentially more powerful, and without HKTs the only option is to generate the <code>pureT</code> and <code>joinedT</code> functions for <em>every possible combination</em> of monads; and if we add a new monad in our code base at a certain point in time, we need to generate a lot of new code just for that, a solution that obviously doesn&rsquo;t scale. I could produce more examples, but there are many other types of effects that can be worked with within a monadic context, some probably not yet discovered: but without a sense of HKTs in the language these entities remain isolated, and cannot be composed without tedious repetition of code: loads of code generation help, but they&rsquo;re usually not the solution to the problem.</p>
+
+<h2 id="a-deep-nest">A deep nest</h2>
+
+<p>The problem is not just horizontal (more monads&rsquo; combinations) but also vertical (deeper nesting). For example, what if our asynchronous call produced a list of values, and from each value we want to make another asynchronous call that produces a list of values, finally bundling all the calls together into a single list? We start from a type like</p>
+
+<p><code>Future&lt;Result&lt;Failure,Array&lt;StartingValue&gt;&gt;&gt;</code></p>
+
+<p>and we&rsquo;ve got a function of type</p>
+
+<p><code>(StartingValue) -&gt; Future&lt;Result&lt;Failure,Array&lt;EndingValue&gt;&gt;&gt;</code>,</p>
+
+<p>where there&rsquo;s one more level of nesting. We&rsquo;d like to go from some monster like</p>
+
+<p><code>Future&lt;Result&lt;Failure,Array&lt;Future&lt;Result&lt;Failure,Array&lt;Value&gt;&gt;&gt;&gt;&gt;&gt;</code></p>
+
+<p>to the joined version</p>
+
+<p><code>Future&lt;Result&lt;Failure,Array&lt;Value&gt;&gt;&gt;</code></p>
+
+<p>and it turns out the if we can define <code>pureT</code> and <code>joinedT</code>, we&rsquo;ll also be able to define <code>pureTT</code> and <code>joinedTT</code>. The former is simple:</p>
+
+<pre><code class="language-swift">extension Future {
+    static func pureTT &lt;E, A&gt; (_ value: A) -&gt; Future&lt;Result&lt;E, Array&lt;A&gt;&gt;&gt; where Value == Result&lt;E, Array&lt;A&gt;&gt; {
+        return .pureT(.pure(value))
+    }
+}
+</code></pre>
+
+<p>notice that on the base type we only call <code>pureT</code>, which means that we only need that the base type is a monad to make this work, because we were able to extend our hypothetical <code>Monad</code> protocol  with the <code>pureT</code> function. <code>joinedTT</code> is where the true magic happens: if you recall <code>joinedT</code> on <code>Effect&lt;Array&lt;Value&gt;&gt;</code>, its implementation didn&rsquo;t care about the fact that the base type was an <code>Effect</code>, and only used <code>pure</code>, <code>map</code> and <code>joined</code> on it, while taking into account the particular structure of <code>Array</code>, that is, the internal type; now, in the case of <code>Future&lt;Result&lt;E, Array&lt;Value&gt;&gt;&gt;</code>, again the most internal type is an <code>Array</code> and again we were able to define <code>pureT</code>, <code>mapT</code> and <code>joinedT</code> on <code>Future&lt;Result&lt;E, Value&gt;&gt;</code>, so in theory this implementation of <code>joinedTT</code> should be like <code>joinedT</code> for <code>Effect&lt;Array&lt;Value&gt;&gt;</code>, where we simply swap <code>pure</code>, <code>map</code> and <code>joined</code> with <code>pureT</code>, <code>mapT</code> and <code>joinedT</code>. Impressively, that&rsquo;s exactly the case:</p>
+
+<pre><code class="language-swift">extension Future {
+    func joinedTT &lt;E, A&gt; () -&gt; Future&lt;Result&lt;E, Array&lt;A&gt;&gt;&gt; where Value == Result&lt;E, Array&lt; Future&lt;Result&lt;E, Array&lt;A&gt;&gt;&gt;&gt;&gt; {
+        return self
+            .mapT { value -&gt; Future&lt;Result&lt;E, Array&lt;A&gt;&gt;&gt; in
+                value.reduce(.pureT([])) { accumulation, element in
+                    accumulation
+                        .mapT { acc in
+                            element.mapT { ele in
+                                acc + ele
+                            }
+                        }
+                        .joinedT()
+                }
+            }
+            .joinedT()
+    }
+}
+</code></pre>
+
+<p>The types change, but the <em>shape</em> of the whole thing is the same. That would work also for <code>joinedTTT</code>, <code>joinedTTTT</code> and so on: the point is, at any level of nesting for a type like</p>
+
+<p><code>Base&lt;Nested1&lt;Nested2&lt;Nested3&lt;...&gt;&gt;&gt;&gt;</code></p>
+
+<p>to make the <code>_T</code> functions work we require that <code>Base</code> is a monad, whatever monad it is, and we need to know the internal structure of <code>Nested1</code>, <code>Nested2</code> and so on, because we need to be able to write <code>joinedT</code>, <code>joinedTT</code> and so on. Notice that we&rsquo;re not abstracting the types <em>in the middle</em>, but we should do that otherwise we&rsquo;d still need to generate a lot of code, even with HKTs. Now, there&rsquo;s is actually a way to do that, that would allow us to abstract over even the most internal type: it would require to be able to define a type as <a href="http://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Traversable.html"><code>Traversable</code></a>, something that requires again HKTs. But I don&rsquo;t want to add too many eggs to this basket: I think I already made a clear example for the usefulness of higher-kinded typing when using monads.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The goal of this article was twofold: introducing monads from a slightly different perspective than usual, and show a case for the addition of HKTs to Swift (or any language with generics, really). Unfortunately, this endeavor requires a lot of words and code to be even vaguely worth of consideration, and this is a big issue with many functional programming concepts: once you live with them, they become the norm and actually shape your mind in approaching the problems in a certain way, but when you&rsquo;ve just started to (or you want to be convinced to) consider them, there seems to be no real &ldquo;perfect&rdquo; strategy, because:</p>
+
+<ul>
+<li>the <strong>inductive</strong> approach, based on practical examples, doesn&rsquo;t work because examples, even if well structured and abundant, are never really enough, due to their very nature: there are always alternatives, that are often considered equivalent even if they&rsquo;re not necessarily equally valid, and specific cases are often too specific, and hard to expand into more generic ones that may include each particular problem;</li>
+<li>the <strong>deductive</strong> approach, based on theory, is often too obscure and alienating for most programmers, because, at least as I was able to observe in my experience, the programming field is usually not very fond of the theoretical way in general, and of the approaches based on analyzing problems purely in the abstract, only considering generic models.</li>
+</ul>
+
+<p>I guess it&rsquo;s a truism that the right path is in the middle: honestly I&rsquo;m not sure about that, but what I&rsquo;m pretty sure about is that when approaching functional programming for the first time, there&rsquo;s a certain <em>leap of faith</em> involved, a trust that things will eventually make sense.</p>
+
+<p>But there&rsquo;s one thing I can say for sure about the whole functional programming approach, and what you would eventually find there: functional programming is critically concerned with being as much as possible <strong>precise</strong> and <strong>correct</strong>. <em>Failing</em> (crashing) is not considered a viable option in almost all cases, and the few ones where an assertion is inevitable are treated as <em>exceptional</em> cases (it sounds like &ldquo;exception&rdquo;, in fact) that must be <strong>very, very carefully controlled and isolated</strong>, and controlling effects, for example through monads, plays a huge role there. I&rsquo;m not saying that functional programming is <em>the only</em> approach that&rsquo;s concerned with preciseness and correctness, but it certainly is one of the most. I hope I was able to shed some light on why, once upon a time, someone even considered applying mathematical concepts like monads to programming, and on why these structure are useful in solving practical programming problems: now it&rsquo;s up to the reader to consider taking this leap.</p>
+
+<h2 id="extra-theory-hkts-emulation">Extra theory: HKTs emulation</h2>
+
+<p>HKTs are a <strong>major</strong> feature of a language, and even if the Apple core Swift team has shown a tepid interest in adding them to Swift, this is not going to happen in a short time (if ever), both for the complexity of the feature, and because there&rsquo;s simply a lot of much more important stuff to be done first. Are we left dead in the water, then? Well, mostly, but not completely: code generation can help, for example, when compositing monads, but it doesn&rsquo;t really scale (I had to stop at <code>_TT</code> in <a href="https://github.com/facile-it/FunctionalKit">FunctionalKit</a> because the code size and the compilation time would have been unbearable with 3 levels of nesting) and it must be redone every time a new monadic type is added. But there&rsquo;s a different option, that is, <em>emulating</em> HKTs.</p>
+
+<p>With a few tricks, we are actually able to write a <em>container type</em> parametrized over a value <strong>and</strong> a type constructor (actually, its <em>tag</em>). We can then define our monad methods in terms of this container, from which we can extract the original &ldquo;containers&rdquo; (like <code>Array</code>, <code>Optional</code>, <code>Future</code>) with the correct parameter applied. This technique is based on an <a href="http://ocamllabs.io/higher/lightweight-higher-kinded-polymorphism.pdf">article</a> by Jeremy Yallop and Leo White, which is an interesting read but I think that exploring the many implementations of it, discovered by just googling &ldquo;simulating higher kinded types&rdquo;, can be enough to get a general idea.</p>
+
+<p>Instead of explaining the whole thing again in Swift, I&rsquo;ll refer to a couple of resources:</p>
+
+<ul>
+<li>this <a href="https://gist.github.com/anandabits/f12a77c49fc002cf68a5f1f62a0ac9c4">wonderful gist</a> from <a href="https://github.com/anandabits">Matthew Johnson</a> that explains the basics of the technique pretty well;</li>
+<li>this <a href="https://github.com/inamiy/HigherKindSwift">library</a> from <a href="https://github.com/inamiy">Yasuhiro Inami</a> that contains a possible implementation, including some concrete extensions of Swift types.</li>
+</ul>
+
+<p>The main idea here is to wrap types into a container for which we can actually define the various <code>map</code>, <code>joined</code> et cetera in an abstract way via a proper procotol, and then extract the base types with a forced unwrap that we&rsquo;re sure is going to work thanks to the constraints posed on the types. The idea seems solid, but I&rsquo;m yet to see Swift production code that uses HKTs defined that way, and I&rsquo;ve not explored the concept myself enough to have formed a complete picture of it&rsquo;s feasibility in my day-to-day work: still, it looks definitely promising.</p>
+
+<p>In the next article I&rsquo;m going to talk about <a href="https://arxiv.org/pdf/1703.10857.pdf">Profunctor Optics</a>, something that <strong>heavily</strong> needs HKTs to be defined - code generation is not going to help there - and I intend to explore HKTs emulation for that particular application.</p>
+
+<p>Until next time.</p>
+
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <aside><div id="disqus_thread"></div></aside>
+    <script>
+        var disqus_config = function () {
+            this.page.url = "https://broomburgo.github.io/fun-ios/post/why-monads/";
+            this.page.identifier = "https://broomburgo.github.io/fun-ios/post/why-monads/";
+            this.page.title = "Why Monads?";
+        };
+
+        (function () {
+            var d = document, s = d.createElement('script');
+
+            s.src = '//fun-ios.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container has-text-centered">
+    <p>&copy; <a href="https://github.com/broomburgo">Elviro Rocca</a> 2018</p>
+  </div>
+</section>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/highlight.min.js"></script>
+
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.6.0/languages/swift.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
