@@ -709,3 +709,120 @@ struct Prism<Whole,Part> {
 which is the representation we're been using the whole time. Notice that we could have *discovered* this simply by starting with `Lens` and being instructed about how to *reverse the arrows*.
 
 An that's all for now.
+
+## Addendum (Aug 4 2018)
+
+When I talked about lenses with a shape like `Lens<A,B?>` I pointed out that optional `Part`s will make the lens intrinsically less composable, because it won't easily compose with something like `Lens<B,C>`. A solution that I proposed was to to produce a lens that injected a *default value* for `B` in cases where it was needed: while this works, it's often not what we want, because we can't always produce a default value for something, and sometimes we really just want to basically not do anything in the negative case. But a `Lens` is simply not enough for this, we cannot make a lens *failable* while keeping it a proper lens that follows the laws. But it turns out that there's *another* optic that works exactly like a failable lens, and it's called `Affine`:
+
+```swift
+struct Affine<Whole,Part> {
+  let tryGet: (Whole) -> Part?
+  let trySet: (Part) -> (Whole) -> Whole?
+}
+```
+
+An `Affine<Whole,Part>` looks exactly like the mix of a lens and prism, for it has `tryGet`, like a prism, while the `set` is actually a `trySet` that *tries* to set a value, but can fail, and that's reflected but the returned type, that is, `Whole?`.
+
+As an example, we can define an `Affine` on the element at a certain index in an array:
+
+```swift
+extension Array {
+  static func affine(at index: Int) -> Affine<Array,Element> {
+    return Affine<Array,Element>.init(
+      tryGet: { array in
+        guard array.indices.contains(index) else { return nil }
+        return array[index]
+      },
+      trySet: { element in
+        { array in
+          guard array.indices.contains(index) else { return nil }
+          var m = array
+          _ = m.remove(at: index)
+          m.insert(element, at: index)
+          return m
+        }
+      })
+  }
+}
+```
+
+Affines compose like lenses and prisms, but instead of using an operator let's use a `then` method:
+
+```swift
+extension Affine {
+  func then <Subpart> (_ other: Affine<Part,Subpart>) -> Affine<Whole,Subpart> {
+    return Affine<Whole,Subpart>.init(
+      tryGet: { s in self.tryGet(s).flatMap(other.tryGet) },
+      trySet: { bp in
+        { s in
+          self.tryGet(s)
+            .flatMap { a in other.trySet(bp)(a) }
+            .flatMap { b in self.trySet(b)(s) }
+        }
+      })
+  }
+}
+```
+
+`Affine` must follow laws very similar to those of `Lens`, that is, `trySetTryGet`, `tryGetTrySet` and `trySetTrySet`. Interestingly, we can turn any lens or prism into an affine:
+
+```swift
+extension Lens {
+  func toAffine() -> Affine<Whole,Part> {
+    return Affine<Whole,Part>.init(
+      tryGet: self.get,
+      trySet: self.set)
+  }
+}
+
+extension Prism {
+  func toAffine() -> Affine<Whole,Part> {
+    return Affine<Whole,Part>.init(
+      tryGet: self.tryGet,
+      trySet: { part in self.tryModify { _ in part } })
+  }
+}
+```
+
+Now we can solve the problem related to composing `Lens<A,B?>` with `Lens<B,C>`. We'll leverage a very specific prism, that is, *the prism on an `Optional<Wrapped>`*:
+
+```swift
+extension Optional {
+  static var prism: Prism<Optional,Wrapped> {
+    return Prism<Optional,Wrapped>.init(
+      tryGet: { $0 },
+      inject: Optional.some)
+  }
+}
+```
+
+Now we simply need a little algebra:
+
+```swift
+/// we cannot do this
+Lens<A,B?> + Lens<B,C> = ?
+
+/// but we can stick a prism in the middle
+Lens<A,B?> + Prism<B?,B> + Lens<B,C>
+
+/// we then turn everything into an affine
+Affine<A,B?> + Affine<B?,B> + Affine<B,C>
+
+/// finally, we compose the affines
+Affine<A,B?> + Affine<B?,B> + Affine<B,C>
+--> Affine<A,B> + Affine<B,C>
+--> Affine<A,C>
+
+/// the final result goes from A to C, with no optionals
+Affine<A,C>
+```
+
+Notice that, because we can always turn a lens or a prism into an affine, it means that we can compose lenses with affines and prisms with affines, which means that, finally, **the affine is the result of the composition between a lens and prism**, which is maybe the big missing piece from the main article:
+
+```swift
+Lens<A,B> + Prism<B,C> = Affine<A,C>
+
+Prism<A,B> + Lens<B,C> = Affine<A,C>
+```
+
+Until next time.
