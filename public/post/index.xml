@@ -38,7 +38,7 @@ For example, in Swift the tuple (Int,String) is an ADT, in the sense that the on
       
       <guid>https://broomburgo.github.io/fun-ios/post/lenses-and-prisms-in-swift-a-pragmatic-approach/</guid>
       <description>This is a new version of an old article about lenses and prisms in Swift. This one contains many updates and more precisely reflects how I actually use these things in my work. This is also based on a talk I gave at iOSDevUK 2017 and Mobilization Conference 2017. I&amp;rsquo;m keeping the old article in draft as reference.
- The concept of functional lens has become pretty popular in functional programming circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like Javascript.</description>
+In date Sep 8 2018 I modified the article further, by including Affine in the discussion, again to reflect my current work better.</description>
     </item>
     
     <item>

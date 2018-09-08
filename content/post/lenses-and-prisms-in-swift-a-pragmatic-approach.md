@@ -7,6 +7,8 @@ draft = false
 
 > This is a new version of an old article about lenses and prisms in Swift. This one contains many updates and more precisely reflects how I actually use these things in my work.  This is also based on a [talk](https://github.com/broomburgo/Lenses-and-Prisms-in-Swift) I gave at [iOSDevUK 2017](https://www.iosdevuk.com) and [Mobilization Conference 2017](http://2017.mobilization.pl). I'm keeping the [old article](https://github.com/broomburgo/fun-ios/blob/master/content/post/lenses-and-prisms-in-swift-a-pragmatic-approach-old.md) in draft as reference.
 
+> In date Sep 8 2018 I modified the article further, by including `Affine` in the discussion, again to reflect my current work better.
+
 ---
 
 The concept of [functional lens](https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/basic-lensing) has become pretty popular in **functional programming** circles, and there are already good contributions for applying lenses to other, traditionally imperative/OO contexts, like [Javascript](https://medium.com/@dtipson/functional-lenses-d1aba9e52254#.wv5xkpy7a). [Brandon Williams](http://www.fewbutripe.com) has done an excellent job in introducing lenses to the [Swift community](https://www.youtube.com/watch?v=ofjehH9f-CU), and in showing [practical examples](https://www.youtube.com/watch?v=A0VaIKK2ijM) when working with something like `UIView`, a radically **OOP construct** that an iOS developer has to work with on a daily basis.
@@ -182,11 +184,11 @@ A `Lens` does exactly this: *encapsulates* the relationship between a data struc
 Lens<A,B> + Lens<B,C> = Lens<A,C>
 ```
 
-If a lens' `Part` is the same as another lens' `Whole` we can *chain* them together, generating a single lens that goes *one level deeper* in the data structure represented by the first lens' `Whole`. It turns out that we can always do this in a completely generic way, we only need the types to match correctly. In fact, we can extend both `Lens` and `Prism` with a `compose` function that will take another lens/prism for which the `Whole` is the same as the first lens/prism `Part`, and return a new lens/prism that will cover the extended range of types:
+If a lens' `Part` is the same as another lens' `Whole` we can *chain* them together, generating a single lens that goes *one level deeper* in the data structure represented by the first lens' `Whole`. It turns out that we can always do this in a completely generic way, we only need the types to match correctly. In fact, we can extend both `Lens` and `Prism` with a `then` function that will take another lens/prism for which the `Whole` is the same as the first lens/prism `Part`, and return a new lens/prism that will cover the extended range of types:
 
 ```swift
 extension Lens {
-  func compose<Subpart>(_ other: Lens<Part,Subpart>) -> Lens<Whole,Subpart> {
+  func then<Subpart>(_ other: Lens<Part,Subpart>) -> Lens<Whole,Subpart> {
     return Lens<Whole,Subpart>(
       get: { other.get(self.get($0)) },
       set: { (subpart: Subpart) in
@@ -206,7 +208,7 @@ We can do the same for `Prism`:
 Prism<A,B> + Prism<B,C> = Prism<A,C>
 
 extension Prism {
-  func compose<Subpart>(_ other: Prism<Part,Subpart>) -> Prism<Whole,Subpart> {
+  func then<Subpart>(_ other: Prism<Part,Subpart>) -> Prism<Whole,Subpart> {
     return Prism<Whole,Subpart>(
       tryGet: { self.tryGet($0).flatMap(other.tryGet) },
       inject: { self.inject(other.inject($0)) })
@@ -225,13 +227,13 @@ infix operator .. : LeftCompositionPrecedence
 
 extension Lens {
   static func .. <Subpart> (lhs: Lens<Whole,Part>, rhs: Lens<Part,Subpart>) -> Lens<Whole,Subpart> {
-    return lhs.compose(rhs)
+    return lhs.then(rhs)
   }
 }
 
 extension Prism {
   static func .. <Subpart> (lhs: Prism<Whole,Part>, rhs: Prism<Part,Subpart>) -> Prism<Whole,Subpart> {
-    return lhs.compose(rhs)
+    return lhs.then(rhs)
   }
 }
 ```
@@ -509,7 +511,7 @@ extension {{ type.name }} {
 
 A slightly different template is going to be needed if the type is generic (because we won't be able to add static stored properties to it), but that's the general strategy.
 
-Tests are still going to be important, though, when we need to prove that functions like `compose` and `zip` work as intended. Also, in some cases we really want to write some lenses and prisms manually, and consequently we're really interested in testing them. For example we can define *prepared* lenses for particular data structures, like a `Dictionary`. I frequently use the following `Lens`, that focuses on a particular key of a dictionary:
+Tests are still going to be important, though, when we need to prove that functions like `then` and `zip` work as intended. Also, in some cases we really want to write some lenses and prisms manually, and consequently we're really interested in testing them. For example we can define *prepared* lenses for particular data structures, like a `Dictionary`. I frequently use the following `Lens`, that focuses on a particular key of a dictionary:
 
 ```swift
 extension Dictionary {
@@ -541,56 +543,125 @@ But here, we could deal with something like this:
 Lens<A,B?> + Lens<B,C> = ?
 ```
 
-`B?` and `B` are not the same, so the regular composition doesn't work. Anyway, from that special composition we probably expect something like this:
+`B?` and `B` are not the same, so the regular composition doesn't work. A `Lens` is simply not enough for this, we cannot make a lens *failable* while keeping it a proper lens that follows the laws. But it turns out that there's *another* optic that works exactly like a failable lens, and it's called `Affine`:
 
 ```swift
-Lens<A,B?> + Lens<B,C> = Lens<A,C?>
-```
-
-The question is: can we write this special `compose` function in a generic way? We could actually pretty easily write a function like the following that compiles:
-
-```swift
-func compose<A,B,C>(
-  _ first: Lens<A,B?>,
-  _ second: Lens<B,C>)
-  -> Lens<A,C?>
-{
-  /// some code
+struct Affine<Whole,Part> {
+  let tryGet: (Whole) -> Part?
+  let trySet: (Part) -> (Whole) -> Whole?
 }
 ```
 
-But if we test our `Lens<A,C?>`, whatever the types are, we would observe that the `setGet` check will fail. Why? Let's reason about this.
+An `Affine<Whole,Part>` looks exactly like the mix of a lens and prism, for it has `tryGet`, like a prism, while the `set` is actually a `trySet` that *tries* to set a value, but can fail, and that's reflected but the returned type, that is, `Whole?`.
 
-It's pretty easy to imagine what the `get` function of the lens will do: if the `B?` property is not `nil`, `get` will yield a non-`nil` `C?`, while if `B?` is `nil`, the resulting `C?` will be `nil`. But what about the `set`? It depends, and that's the problem here: because the relationship with `B` is encapsulated within the `Lens<A,C?>`, we cannot *see* what's going on in the data structure `A` on which we're applying the lens. For example, if we `set` a `C?` that is `nil`, because `C` is not optional for `B` the only thing that we can do is to set the `B?` property to `nil`. But if we `set` a `C?` that is **not** `nil`, and we apply the lens to a data structure were `B?` is `nil`, we don't have anything to `set` the non-`nil` `C?` into! There is a similar problem with `KeyPath`: in fact if you grab a `KeyPath` with an optional property within the path itself, the resulting `KeyPath` is **not** going to be a `WritableKeyPath`.
-
-To solve this problem we need to provide a *default* value for `B`, that's going to be used in cases where we're setting a non-nil `C?` into a data structure where `B?` is nil:
+As an example, we can define an `Affine` on the element at a certain index in an array:
 
 ```swift
-func compose<A,B,C>(
-  _ first: Lens<A,B?>,
-  _ second: Lens<B,C>,
-  injecting: @escaping @autoclosure () -> B)
-  -> Lens<A,C?>
-{
-  return Lens<A,C?>.init(
-    get: { whole in first.get(whole).map(second.get) },
-    set: { optionalPart in { whole in
-      switch optionalPart {
-      case .some(let value):
-        return first.set(second.set(value)(first.get(whole) ?? injecting()))(whole)
-      case .none:
-        return first.set(nil)(whole)
-      }
-    }
-  })
+extension Array {
+  static func affine(at index: Int) -> Affine<Array,Element> {
+    return Affine<Array,Element>.init(
+      tryGet: { array in
+        guard array.indices.contains(index) else { return nil }
+        return array[index]
+      },
+      trySet: { element in
+        { array in
+          guard array.indices.contains(index) else { return nil }
+          var m = array
+          _ = m.remove(at: index)
+          m.insert(element, at: index)
+          return m
+        }
+      })
+  }
 }
 ```
 
-Notice that this `compose` function must yield a well-behaved lens for *every possible* default value for `B`: this means that, when testing the resulting lens with random `A` and `C?`, we also need to pass random values for `B`.
+Affines compose like lenses and prisms, with the `then` method:
+
+```swift
+extension Affine {
+  func then <Subpart> (_ other: Affine<Part,Subpart>) -> Affine<Whole,Subpart> {
+    return Affine<Whole,Subpart>.init(
+      tryGet: { s in self.tryGet(s).flatMap(other.tryGet) },
+      trySet: { bp in
+        { s in
+          self.tryGet(s)
+            .flatMap { a in other.trySet(bp)(a) }
+            .flatMap { b in self.trySet(b)(s) }
+        }
+      })
+  }
+}
+```
+
+`Affine` must follow laws very similar to those of `Lens`, that is, `trySetTryGet`, `tryGetTrySet` and `trySetTrySet`. Interestingly, we can turn any lens or prism into an affine:
+
+```swift
+extension Lens {
+  func toAffine() -> Affine<Whole,Part> {
+    return Affine<Whole,Part>.init(
+      tryGet: self.get,
+      trySet: self.set)
+  }
+}
+
+extension Prism {
+  func toAffine() -> Affine<Whole,Part> {
+    return Affine<Whole,Part>.init(
+      tryGet: self.tryGet,
+      trySet: { part in self.tryModify { _ in part } })
+  }
+}
+```
+
+Now we can solve the problem related to composing `Lens<A,B?>` with `Lens<B,C>`. We'll leverage a very specific prism, that is, *the prism on an `Optional<Wrapped>`*:
+
+```swift
+extension Optional {
+  static var prism: Prism<Optional,Wrapped> {
+    return Prism<Optional,Wrapped>.init(
+      tryGet: { $0 },
+      inject: Optional.some)
+  }
+}
+```
+
+Now we simply need a little algebra:
+
+```swift
+/// we cannot do this
+Lens<A,B?> + Lens<B,C> = ?
+
+/// but we can stick a prism in the middle
+Lens<A,B?> + Prism<B?,B> + Lens<B,C>
+
+/// we then turn everything into an affine
+Affine<A,B?> + Affine<B?,B> + Affine<B,C>
+
+/// finally, we compose the affines
+Affine<A,B?> + Affine<B?,B> + Affine<B,C>
+--> Affine<A,B> + Affine<B,C>
+--> Affine<A,C>
+
+/// the final result goes from A to C, with no optionals
+Affine<A,C>
+```
+
+Notice that, because we can always turn a lens or a prism into an affine, it means that we can compose lenses with affines and prisms with affines, which means that, finally, **the affine is the result of the composition between a lens and prism**, which is maybe the big piece that was still missing:
+
+```swift
+Lens<A,B> + Prism<B,C> = Affine<A,C>
+
+Prism<A,B> + Lens<B,C> = Affine<A,C>
+```
+
+`Affine` solves our *nullability* problem by employing a special focusing strategy: it either focuses on *something* or on *nothing*, and this idea is encoded in its very semantics. Notice that, once you're in `Affine`, you simply can't get out, because *everything* will be considered nullable from that on, and there's no alternative in terms of optics: a weak link makes for a weak chain. To avoid using `Affine` we need to avoid `Optional` altogether, but usually `Optional` is exactly what we want, because it better expresses our logic. There are some specific cases, though, where we could cook-up a data structure 
+where, in some place, instead of `Optional` we use a *default value*, and that would remove the need for `Affine` (for example, instead of `Dictionary<Key,Value>` we could imagine a `DefaultedDictionary<Key,Value>`): it's up to you to choose the right solution for each specific problem.
 
 ## Conclusion
 
-`Lens` and `Prism` are abstractions over the relationships between a data structure and its parts. They allow to encapsulate such relationships with any level of composition, both *vertical* (like from a parent to a child of a child) and *horizontal* (like from a parent to different children in parallel). This relationship can be extended in many different ways: we can *induce structure* from a child to a parent, like for example in giving *ordering logic* to a data structure starting from a comparator in one of its parts (it was shown by Brandon Williams in [this talk](https://www.youtube.com/watch?v=VFPhPOnPiTY)).
+`Lens`, `Prism` and `Affine` are abstractions over the relationships between a data structure and its parts. They allow to encapsulate such relationships with any level of composition, both *vertical* (like from a parent to a child of a child) and *horizontal* (like from a parent to different children in parallel). This relationship can be extended in many different ways: we can *induce structure* from a child to a parent, like for example in giving *ordering logic* to a data structure starting from a comparator in one of its parts (it was shown by Brandon Williams in [this talk](https://www.youtube.com/watch?v=VFPhPOnPiTY)).
 
 The main use case is representing the modifications induced into a data structure by modifying its parts, and composition plays a huge role. A nice, simple use case for prisms is also to assert that an enum is in a particular case, like you would do with `guard case` but with a single expression, for example with a function like this:
 
@@ -707,122 +778,5 @@ struct Prism<Whole,Part> {
 ```
 
 which is the representation we're been using the whole time. Notice that we could have *discovered* this simply by starting with `Lens` and being instructed about how to *reverse the arrows*.
-
-An that's all for now.
-
-## Addendum (Aug 4 2018)
-
-When I talked about lenses with a shape like `Lens<A,B?>` I pointed out that optional `Part`s will make the lens intrinsically less composable, because it won't easily compose with something like `Lens<B,C>`. A solution that I proposed was to to produce a lens that injected a *default value* for `B` in cases where it was needed: while this works, it's often not what we want, because we can't always produce a default value for something, and sometimes we really just want to basically not do anything in the negative case. But a `Lens` is simply not enough for this, we cannot make a lens *failable* while keeping it a proper lens that follows the laws. But it turns out that there's *another* optic that works exactly like a failable lens, and it's called `Affine`:
-
-```swift
-struct Affine<Whole,Part> {
-  let tryGet: (Whole) -> Part?
-  let trySet: (Part) -> (Whole) -> Whole?
-}
-```
-
-An `Affine<Whole,Part>` looks exactly like the mix of a lens and prism, for it has `tryGet`, like a prism, while the `set` is actually a `trySet` that *tries* to set a value, but can fail, and that's reflected but the returned type, that is, `Whole?`.
-
-As an example, we can define an `Affine` on the element at a certain index in an array:
-
-```swift
-extension Array {
-  static func affine(at index: Int) -> Affine<Array,Element> {
-    return Affine<Array,Element>.init(
-      tryGet: { array in
-        guard array.indices.contains(index) else { return nil }
-        return array[index]
-      },
-      trySet: { element in
-        { array in
-          guard array.indices.contains(index) else { return nil }
-          var m = array
-          _ = m.remove(at: index)
-          m.insert(element, at: index)
-          return m
-        }
-      })
-  }
-}
-```
-
-Affines compose like lenses and prisms, but instead of using an operator let's use a `then` method:
-
-```swift
-extension Affine {
-  func then <Subpart> (_ other: Affine<Part,Subpart>) -> Affine<Whole,Subpart> {
-    return Affine<Whole,Subpart>.init(
-      tryGet: { s in self.tryGet(s).flatMap(other.tryGet) },
-      trySet: { bp in
-        { s in
-          self.tryGet(s)
-            .flatMap { a in other.trySet(bp)(a) }
-            .flatMap { b in self.trySet(b)(s) }
-        }
-      })
-  }
-}
-```
-
-`Affine` must follow laws very similar to those of `Lens`, that is, `trySetTryGet`, `tryGetTrySet` and `trySetTrySet`. Interestingly, we can turn any lens or prism into an affine:
-
-```swift
-extension Lens {
-  func toAffine() -> Affine<Whole,Part> {
-    return Affine<Whole,Part>.init(
-      tryGet: self.get,
-      trySet: self.set)
-  }
-}
-
-extension Prism {
-  func toAffine() -> Affine<Whole,Part> {
-    return Affine<Whole,Part>.init(
-      tryGet: self.tryGet,
-      trySet: { part in self.tryModify { _ in part } })
-  }
-}
-```
-
-Now we can solve the problem related to composing `Lens<A,B?>` with `Lens<B,C>`. We'll leverage a very specific prism, that is, *the prism on an `Optional<Wrapped>`*:
-
-```swift
-extension Optional {
-  static var prism: Prism<Optional,Wrapped> {
-    return Prism<Optional,Wrapped>.init(
-      tryGet: { $0 },
-      inject: Optional.some)
-  }
-}
-```
-
-Now we simply need a little algebra:
-
-```swift
-/// we cannot do this
-Lens<A,B?> + Lens<B,C> = ?
-
-/// but we can stick a prism in the middle
-Lens<A,B?> + Prism<B?,B> + Lens<B,C>
-
-/// we then turn everything into an affine
-Affine<A,B?> + Affine<B?,B> + Affine<B,C>
-
-/// finally, we compose the affines
-Affine<A,B?> + Affine<B?,B> + Affine<B,C>
---> Affine<A,B> + Affine<B,C>
---> Affine<A,C>
-
-/// the final result goes from A to C, with no optionals
-Affine<A,C>
-```
-
-Notice that, because we can always turn a lens or a prism into an affine, it means that we can compose lenses with affines and prisms with affines, which means that, finally, **the affine is the result of the composition between a lens and prism**, which is maybe the big missing piece from the main article:
-
-```swift
-Lens<A,B> + Prism<B,C> = Affine<A,C>
-
-Prism<A,B> + Lens<B,C> = Affine<A,C>
-```
 
 Until next time.
