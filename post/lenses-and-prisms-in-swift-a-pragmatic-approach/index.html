@@ -52,6 +52,8 @@
 
 <blockquote>
 <p>This is a new version of an old article about lenses and prisms in Swift. This one contains many updates and more precisely reflects how I actually use these things in my work.  This is also based on a <a href="https://github.com/broomburgo/Lenses-and-Prisms-in-Swift">talk</a> I gave at <a href="https://www.iosdevuk.com">iOSDevUK 2017</a> and <a href="http://2017.mobilization.pl">Mobilization Conference 2017</a>. I&rsquo;m keeping the <a href="https://github.com/broomburgo/fun-ios/blob/master/content/post/lenses-and-prisms-in-swift-a-pragmatic-approach-old.md">old article</a> in draft as reference.</p>
+
+<p>In date Sep 8 2018 I modified the article further, by including <code>Affine</code> in the discussion, again to reflect my current work better.</p>
 </blockquote>
 
 <hr />
@@ -222,10 +224,10 @@ m_newModel.buttonState = initialState.buttonState
 <pre><code class="language-swift">Lens&lt;A,B&gt; + Lens&lt;B,C&gt; = Lens&lt;A,C&gt;
 </code></pre>
 
-<p>If a lens&rsquo; <code>Part</code> is the same as another lens&rsquo; <code>Whole</code> we can <em>chain</em> them together, generating a single lens that goes <em>one level deeper</em> in the data structure represented by the first lens&rsquo; <code>Whole</code>. It turns out that we can always do this in a completely generic way, we only need the types to match correctly. In fact, we can extend both <code>Lens</code> and <code>Prism</code> with a <code>compose</code> function that will take another lens/prism for which the <code>Whole</code> is the same as the first lens/prism <code>Part</code>, and return a new lens/prism that will cover the extended range of types:</p>
+<p>If a lens&rsquo; <code>Part</code> is the same as another lens&rsquo; <code>Whole</code> we can <em>chain</em> them together, generating a single lens that goes <em>one level deeper</em> in the data structure represented by the first lens&rsquo; <code>Whole</code>. It turns out that we can always do this in a completely generic way, we only need the types to match correctly. In fact, we can extend both <code>Lens</code> and <code>Prism</code> with a <code>then</code> function that will take another lens/prism for which the <code>Whole</code> is the same as the first lens/prism <code>Part</code>, and return a new lens/prism that will cover the extended range of types:</p>
 
 <pre><code class="language-swift">extension Lens {
-  func compose&lt;Subpart&gt;(_ other: Lens&lt;Part,Subpart&gt;) -&gt; Lens&lt;Whole,Subpart&gt; {
+  func then&lt;Subpart&gt;(_ other: Lens&lt;Part,Subpart&gt;) -&gt; Lens&lt;Whole,Subpart&gt; {
     return Lens&lt;Whole,Subpart&gt;(
       get: { other.get(self.get($0)) },
       set: { (subpart: Subpart) in
@@ -244,7 +246,7 @@ m_newModel.buttonState = initialState.buttonState
 <pre><code class="language-swift">Prism&lt;A,B&gt; + Prism&lt;B,C&gt; = Prism&lt;A,C&gt;
 
 extension Prism {
-  func compose&lt;Subpart&gt;(_ other: Prism&lt;Part,Subpart&gt;) -&gt; Prism&lt;Whole,Subpart&gt; {
+  func then&lt;Subpart&gt;(_ other: Prism&lt;Part,Subpart&gt;) -&gt; Prism&lt;Whole,Subpart&gt; {
     return Prism&lt;Whole,Subpart&gt;(
       tryGet: { self.tryGet($0).flatMap(other.tryGet) },
       inject: { self.inject(other.inject($0)) })
@@ -262,13 +264,13 @@ infix operator .. : LeftCompositionPrecedence
 
 extension Lens {
   static func .. &lt;Subpart&gt; (lhs: Lens&lt;Whole,Part&gt;, rhs: Lens&lt;Part,Subpart&gt;) -&gt; Lens&lt;Whole,Subpart&gt; {
-    return lhs.compose(rhs)
+    return lhs.then(rhs)
   }
 }
 
 extension Prism {
   static func .. &lt;Subpart&gt; (lhs: Prism&lt;Whole,Part&gt;, rhs: Prism&lt;Part,Subpart&gt;) -&gt; Prism&lt;Whole,Subpart&gt; {
-    return lhs.compose(rhs)
+    return lhs.then(rhs)
   }
 }
 </code></pre>
@@ -534,7 +536,7 @@ extension {{ type.name }} {
 
 <p>A slightly different template is going to be needed if the type is generic (because we won&rsquo;t be able to add static stored properties to it), but that&rsquo;s the general strategy.</p>
 
-<p>Tests are still going to be important, though, when we need to prove that functions like <code>compose</code> and <code>zip</code> work as intended. Also, in some cases we really want to write some lenses and prisms manually, and consequently we&rsquo;re really interested in testing them. For example we can define <em>prepared</em> lenses for particular data structures, like a <code>Dictionary</code>. I frequently use the following <code>Lens</code>, that focuses on a particular key of a dictionary:</p>
+<p>Tests are still going to be important, though, when we need to prove that functions like <code>then</code> and <code>zip</code> work as intended. Also, in some cases we really want to write some lenses and prisms manually, and consequently we&rsquo;re really interested in testing them. For example we can define <em>prepared</em> lenses for particular data structures, like a <code>Dictionary</code>. I frequently use the following <code>Lens</code>, that focuses on a particular key of a dictionary:</p>
 
 <pre><code class="language-swift">extension Dictionary {
   static func lens(at key: Key) -&gt; Lens&lt;Dictionary,Value?&gt; {
@@ -563,53 +565,118 @@ extension {{ type.name }} {
 <pre><code class="language-swift">Lens&lt;A,B?&gt; + Lens&lt;B,C&gt; = ?
 </code></pre>
 
-<p><code>B?</code> and <code>B</code> are not the same, so the regular composition doesn&rsquo;t work. Anyway, from that special composition we probably expect something like this:</p>
+<p><code>B?</code> and <code>B</code> are not the same, so the regular composition doesn&rsquo;t work. A <code>Lens</code> is simply not enough for this, we cannot make a lens <em>failable</em> while keeping it a proper lens that follows the laws. But it turns out that there&rsquo;s <em>another</em> optic that works exactly like a failable lens, and it&rsquo;s called <code>Affine</code>:</p>
 
-<pre><code class="language-swift">Lens&lt;A,B?&gt; + Lens&lt;B,C&gt; = Lens&lt;A,C?&gt;
-</code></pre>
-
-<p>The question is: can we write this special <code>compose</code> function in a generic way? We could actually pretty easily write a function like the following that compiles:</p>
-
-<pre><code class="language-swift">func compose&lt;A,B,C&gt;(
-  _ first: Lens&lt;A,B?&gt;,
-  _ second: Lens&lt;B,C&gt;)
-  -&gt; Lens&lt;A,C?&gt;
-{
-  /// some code
+<pre><code class="language-swift">struct Affine&lt;Whole,Part&gt; {
+  let tryGet: (Whole) -&gt; Part?
+  let trySet: (Part) -&gt; (Whole) -&gt; Whole?
 }
 </code></pre>
 
-<p>But if we test our <code>Lens&lt;A,C?&gt;</code>, whatever the types are, we would observe that the <code>setGet</code> check will fail. Why? Let&rsquo;s reason about this.</p>
+<p>An <code>Affine&lt;Whole,Part&gt;</code> looks exactly like the mix of a lens and prism, for it has <code>tryGet</code>, like a prism, while the <code>set</code> is actually a <code>trySet</code> that <em>tries</em> to set a value, but can fail, and that&rsquo;s reflected but the returned type, that is, <code>Whole?</code>.</p>
 
-<p>It&rsquo;s pretty easy to imagine what the <code>get</code> function of the lens will do: if the <code>B?</code> property is not <code>nil</code>, <code>get</code> will yield a non-<code>nil</code> <code>C?</code>, while if <code>B?</code> is <code>nil</code>, the resulting <code>C?</code> will be <code>nil</code>. But what about the <code>set</code>? It depends, and that&rsquo;s the problem here: because the relationship with <code>B</code> is encapsulated within the <code>Lens&lt;A,C?&gt;</code>, we cannot <em>see</em> what&rsquo;s going on in the data structure <code>A</code> on which we&rsquo;re applying the lens. For example, if we <code>set</code> a <code>C?</code> that is <code>nil</code>, because <code>C</code> is not optional for <code>B</code> the only thing that we can do is to set the <code>B?</code> property to <code>nil</code>. But if we <code>set</code> a <code>C?</code> that is <strong>not</strong> <code>nil</code>, and we apply the lens to a data structure were <code>B?</code> is <code>nil</code>, we don&rsquo;t have anything to <code>set</code> the non-<code>nil</code> <code>C?</code> into! There is a similar problem with <code>KeyPath</code>: in fact if you grab a <code>KeyPath</code> with an optional property within the path itself, the resulting <code>KeyPath</code> is <strong>not</strong> going to be a <code>WritableKeyPath</code>.</p>
+<p>As an example, we can define an <code>Affine</code> on the element at a certain index in an array:</p>
 
-<p>To solve this problem we need to provide a <em>default</em> value for <code>B</code>, that&rsquo;s going to be used in cases where we&rsquo;re setting a non-nil <code>C?</code> into a data structure where <code>B?</code> is nil:</p>
-
-<pre><code class="language-swift">func compose&lt;A,B,C&gt;(
-  _ first: Lens&lt;A,B?&gt;,
-  _ second: Lens&lt;B,C&gt;,
-  injecting: @escaping @autoclosure () -&gt; B)
-  -&gt; Lens&lt;A,C?&gt;
-{
-  return Lens&lt;A,C?&gt;.init(
-    get: { whole in first.get(whole).map(second.get) },
-    set: { optionalPart in { whole in
-      switch optionalPart {
-      case .some(let value):
-        return first.set(second.set(value)(first.get(whole) ?? injecting()))(whole)
-      case .none:
-        return first.set(nil)(whole)
-      }
-    }
-  })
+<pre><code class="language-swift">extension Array {
+  static func affine(at index: Int) -&gt; Affine&lt;Array,Element&gt; {
+    return Affine&lt;Array,Element&gt;.init(
+      tryGet: { array in
+        guard array.indices.contains(index) else { return nil }
+        return array[index]
+      },
+      trySet: { element in
+        { array in
+          guard array.indices.contains(index) else { return nil }
+          var m = array
+          _ = m.remove(at: index)
+          m.insert(element, at: index)
+          return m
+        }
+      })
+  }
 }
 </code></pre>
 
-<p>Notice that this <code>compose</code> function must yield a well-behaved lens for <em>every possible</em> default value for <code>B</code>: this means that, when testing the resulting lens with random <code>A</code> and <code>C?</code>, we also need to pass random values for <code>B</code>.</p>
+<p>Affines compose like lenses and prisms, with the <code>then</code> method:</p>
+
+<pre><code class="language-swift">extension Affine {
+  func then &lt;Subpart&gt; (_ other: Affine&lt;Part,Subpart&gt;) -&gt; Affine&lt;Whole,Subpart&gt; {
+    return Affine&lt;Whole,Subpart&gt;.init(
+      tryGet: { s in self.tryGet(s).flatMap(other.tryGet) },
+      trySet: { bp in
+        { s in
+          self.tryGet(s)
+            .flatMap { a in other.trySet(bp)(a) }
+            .flatMap { b in self.trySet(b)(s) }
+        }
+      })
+  }
+}
+</code></pre>
+
+<p><code>Affine</code> must follow laws very similar to those of <code>Lens</code>, that is, <code>trySetTryGet</code>, <code>tryGetTrySet</code> and <code>trySetTrySet</code>. Interestingly, we can turn any lens or prism into an affine:</p>
+
+<pre><code class="language-swift">extension Lens {
+  func toAffine() -&gt; Affine&lt;Whole,Part&gt; {
+    return Affine&lt;Whole,Part&gt;.init(
+      tryGet: self.get,
+      trySet: self.set)
+  }
+}
+
+extension Prism {
+  func toAffine() -&gt; Affine&lt;Whole,Part&gt; {
+    return Affine&lt;Whole,Part&gt;.init(
+      tryGet: self.tryGet,
+      trySet: { part in self.tryModify { _ in part } })
+  }
+}
+</code></pre>
+
+<p>Now we can solve the problem related to composing <code>Lens&lt;A,B?&gt;</code> with <code>Lens&lt;B,C&gt;</code>. We&rsquo;ll leverage a very specific prism, that is, <em>the prism on an <code>Optional&lt;Wrapped&gt;</code></em>:</p>
+
+<pre><code class="language-swift">extension Optional {
+  static var prism: Prism&lt;Optional,Wrapped&gt; {
+    return Prism&lt;Optional,Wrapped&gt;.init(
+      tryGet: { $0 },
+      inject: Optional.some)
+  }
+}
+</code></pre>
+
+<p>Now we simply need a little algebra:</p>
+
+<pre><code class="language-swift">/// we cannot do this
+Lens&lt;A,B?&gt; + Lens&lt;B,C&gt; = ?
+
+/// but we can stick a prism in the middle
+Lens&lt;A,B?&gt; + Prism&lt;B?,B&gt; + Lens&lt;B,C&gt;
+
+/// we then turn everything into an affine
+Affine&lt;A,B?&gt; + Affine&lt;B?,B&gt; + Affine&lt;B,C&gt;
+
+/// finally, we compose the affines
+Affine&lt;A,B?&gt; + Affine&lt;B?,B&gt; + Affine&lt;B,C&gt;
+--&gt; Affine&lt;A,B&gt; + Affine&lt;B,C&gt;
+--&gt; Affine&lt;A,C&gt;
+
+/// the final result goes from A to C, with no optionals
+Affine&lt;A,C&gt;
+</code></pre>
+
+<p>Notice that, because we can always turn a lens or a prism into an affine, it means that we can compose lenses with affines and prisms with affines, which means that, finally, <strong>the affine is the result of the composition between a lens and prism</strong>, which is maybe the big piece that was still missing:</p>
+
+<pre><code class="language-swift">Lens&lt;A,B&gt; + Prism&lt;B,C&gt; = Affine&lt;A,C&gt;
+
+Prism&lt;A,B&gt; + Lens&lt;B,C&gt; = Affine&lt;A,C&gt;
+</code></pre>
+
+<p><code>Affine</code> solves our <em>nullability</em> problem by employing a special focusing strategy: it either focuses on <em>something</em> or on <em>nothing</em>, and this idea is encoded in its very semantics. Notice that, once you&rsquo;re in <code>Affine</code>, you simply can&rsquo;t get out, because <em>everything</em> will be considered nullable from that on, and there&rsquo;s no alternative in terms of optics: a weak link makes for a weak chain. To avoid using <code>Affine</code> we need to avoid <code>Optional</code> altogether, but usually <code>Optional</code> is exactly what we want, because it better expresses our logic. There are some specific cases, though, where we could cook-up a data structure
+where, in some place, instead of <code>Optional</code> we use a <em>default value</em>, and that would remove the need for <code>Affine</code> (for example, instead of <code>Dictionary&lt;Key,Value&gt;</code> we could imagine a <code>DefaultedDictionary&lt;Key,Value&gt;</code>): it&rsquo;s up to you to choose the right solution for each specific problem.</p>
 
 <h2 id="conclusion">Conclusion</h2>
 
-<p><code>Lens</code> and <code>Prism</code> are abstractions over the relationships between a data structure and its parts. They allow to encapsulate such relationships with any level of composition, both <em>vertical</em> (like from a parent to a child of a child) and <em>horizontal</em> (like from a parent to different children in parallel). This relationship can be extended in many different ways: we can <em>induce structure</em> from a child to a parent, like for example in giving <em>ordering logic</em> to a data structure starting from a comparator in one of its parts (it was shown by Brandon Williams in <a href="https://www.youtube.com/watch?v=VFPhPOnPiTY">this talk</a>).</p>
+<p><code>Lens</code>, <code>Prism</code> and <code>Affine</code> are abstractions over the relationships between a data structure and its parts. They allow to encapsulate such relationships with any level of composition, both <em>vertical</em> (like from a parent to a child of a child) and <em>horizontal</em> (like from a parent to different children in parallel). This relationship can be extended in many different ways: we can <em>induce structure</em> from a child to a parent, like for example in giving <em>ordering logic</em> to a data structure starting from a comparator in one of its parts (it was shown by Brandon Williams in <a href="https://www.youtube.com/watch?v=VFPhPOnPiTY">this talk</a>).</p>
 
 <p>The main use case is representing the modifications induced into a data structure by modifying its parts, and composition plays a huge role. A nice, simple use case for prisms is also to assert that an enum is in a particular case, like you would do with <code>guard case</code> but with a single expression, for example with a function like this:</p>
 
@@ -716,116 +783,6 @@ let injectB: (B) -&gt; Coproduct&lt;A,B&gt; = { .b($0) }
 </code></pre>
 
 <p>which is the representation we&rsquo;re been using the whole time. Notice that we could have <em>discovered</em> this simply by starting with <code>Lens</code> and being instructed about how to <em>reverse the arrows</em>.</p>
-
-<p>An that&rsquo;s all for now.</p>
-
-<h2 id="addendum-aug-4-2018">Addendum (Aug 4 2018)</h2>
-
-<p>When I talked about lenses with a shape like <code>Lens&lt;A,B?&gt;</code> I pointed out that optional <code>Part</code>s will make the lens intrinsically less composable, because it won&rsquo;t easily compose with something like <code>Lens&lt;B,C&gt;</code>. A solution that I proposed was to to produce a lens that injected a <em>default value</em> for <code>B</code> in cases where it was needed: while this works, it&rsquo;s often not what we want, because we can&rsquo;t always produce a default value for something, and sometimes we really just want to basically not do anything in the negative case. But a <code>Lens</code> is simply not enough for this, we cannot make a lens <em>failable</em> while keeping it a proper lens that follows the laws. But it turns out that there&rsquo;s <em>another</em> optic that works exactly like a failable lens, and it&rsquo;s called <code>Affine</code>:</p>
-
-<pre><code class="language-swift">struct Affine&lt;Whole,Part&gt; {
-  let tryGet: (Whole) -&gt; Part?
-  let trySet: (Part) -&gt; (Whole) -&gt; Whole?
-}
-</code></pre>
-
-<p>An <code>Affine&lt;Whole,Part&gt;</code> looks exactly like the mix of a lens and prism, for it has <code>tryGet</code>, like a prism, while the <code>set</code> is actually a <code>trySet</code> that <em>tries</em> to set a value, but can fail, and that&rsquo;s reflected but the returned type, that is, <code>Whole?</code>.</p>
-
-<p>As an example, we can define an <code>Affine</code> on the element at a certain index in an array:</p>
-
-<pre><code class="language-swift">extension Array {
-  static func affine(at index: Int) -&gt; Affine&lt;Array,Element&gt; {
-    return Affine&lt;Array,Element&gt;.init(
-      tryGet: { array in
-        guard array.indices.contains(index) else { return nil }
-        return array[index]
-      },
-      trySet: { element in
-        { array in
-          guard array.indices.contains(index) else { return nil }
-          var m = array
-          _ = m.remove(at: index)
-          m.insert(element, at: index)
-          return m
-        }
-      })
-  }
-}
-</code></pre>
-
-<p>Affines compose like lenses and prisms, but instead of using an operator let&rsquo;s use a <code>then</code> method:</p>
-
-<pre><code class="language-swift">extension Affine {
-  func then &lt;Subpart&gt; (_ other: Affine&lt;Part,Subpart&gt;) -&gt; Affine&lt;Whole,Subpart&gt; {
-    return Affine&lt;Whole,Subpart&gt;.init(
-      tryGet: { s in self.tryGet(s).flatMap(other.tryGet) },
-      trySet: { bp in
-        { s in
-          self.tryGet(s)
-            .flatMap { a in other.trySet(bp)(a) }
-            .flatMap { b in self.trySet(b)(s) }
-        }
-      })
-  }
-}
-</code></pre>
-
-<p><code>Affine</code> must follow laws very similar to those of <code>Lens</code>, that is, <code>trySetTryGet</code>, <code>tryGetTrySet</code> and <code>trySetTrySet</code>. Interestingly, we can turn any lens or prism into an affine:</p>
-
-<pre><code class="language-swift">extension Lens {
-  func toAffine() -&gt; Affine&lt;Whole,Part&gt; {
-    return Affine&lt;Whole,Part&gt;.init(
-      tryGet: self.get,
-      trySet: self.set)
-  }
-}
-
-extension Prism {
-  func toAffine() -&gt; Affine&lt;Whole,Part&gt; {
-    return Affine&lt;Whole,Part&gt;.init(
-      tryGet: self.tryGet,
-      trySet: { part in self.tryModify { _ in part } })
-  }
-}
-</code></pre>
-
-<p>Now we can solve the problem related to composing <code>Lens&lt;A,B?&gt;</code> with <code>Lens&lt;B,C&gt;</code>. We&rsquo;ll leverage a very specific prism, that is, <em>the prism on an <code>Optional&lt;Wrapped&gt;</code></em>:</p>
-
-<pre><code class="language-swift">extension Optional {
-  static var prism: Prism&lt;Optional,Wrapped&gt; {
-    return Prism&lt;Optional,Wrapped&gt;.init(
-      tryGet: { $0 },
-      inject: Optional.some)
-  }
-}
-</code></pre>
-
-<p>Now we simply need a little algebra:</p>
-
-<pre><code class="language-swift">/// we cannot do this
-Lens&lt;A,B?&gt; + Lens&lt;B,C&gt; = ?
-
-/// but we can stick a prism in the middle
-Lens&lt;A,B?&gt; + Prism&lt;B?,B&gt; + Lens&lt;B,C&gt;
-
-/// we then turn everything into an affine
-Affine&lt;A,B?&gt; + Affine&lt;B?,B&gt; + Affine&lt;B,C&gt;
-
-/// finally, we compose the affines
-Affine&lt;A,B?&gt; + Affine&lt;B?,B&gt; + Affine&lt;B,C&gt;
---&gt; Affine&lt;A,B&gt; + Affine&lt;B,C&gt;
---&gt; Affine&lt;A,C&gt;
-
-/// the final result goes from A to C, with no optionals
-Affine&lt;A,C&gt;
-</code></pre>
-
-<p>Notice that, because we can always turn a lens or a prism into an affine, it means that we can compose lenses with affines and prisms with affines, which means that, finally, <strong>the affine is the result of the composition between a lens and prism</strong>, which is maybe the big missing piece from the main article:</p>
-
-<pre><code class="language-swift">Lens&lt;A,B&gt; + Prism&lt;B,C&gt; = Affine&lt;A,C&gt;
-
-Prism&lt;A,B&gt; + Lens&lt;B,C&gt; = Affine&lt;A,C&gt;
-</code></pre>
 
 <p>Until next time.</p>
 
