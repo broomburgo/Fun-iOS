@@ -1,42 +1,27 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  
-  <url>
-    <loc>https://broomburgo.github.io/fun-ios/post/why-monads/</loc>
-    <lastmod>2018-07-30T15:00:00+02:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://broomburgo.github.io/fun-ios/post/algebraic-datatypes-for-contextual-and-conditional-computation/</loc>
-    <lastmod>2018-03-19T15:00:01+01:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://broomburgo.github.io/fun-ios/post/lenses-and-prisms-in-swift-a-pragmatic-approach/</loc>
-    <lastmod>2017-11-19T14:00:01+01:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://broomburgo.github.io/fun-ios/post/on-abstraction/</loc>
-    <lastmod>2017-09-09T20:10:00+00:00</lastmod>
-  </url>
-  
   <url>
     <loc>https://broomburgo.github.io/fun-ios/</loc>
     <lastmod>2018-07-30T15:00:00+02:00</lastmod>
-    <priority>0</priority>
-  </url>
-  
-  <url>
+  </url><url>
     <loc>https://broomburgo.github.io/fun-ios/post/</loc>
     <lastmod>2018-07-30T15:00:00+02:00</lastmod>
-    <priority>0</priority>
-  </url>
-  
-  <url>
+  </url><url>
+    <loc>https://broomburgo.github.io/fun-ios/post/why-monads/</loc>
+    <lastmod>2018-07-30T15:00:00+02:00</lastmod>
+  </url><url>
+    <loc>https://broomburgo.github.io/fun-ios/post/algebraic-datatypes-for-contextual-and-conditional-computation/</loc>
+    <lastmod>2018-03-19T15:00:01+01:00</lastmod>
+  </url><url>
+    <loc>https://broomburgo.github.io/fun-ios/post/lenses-and-prisms-in-swift-a-pragmatic-approach/</loc>
+    <lastmod>2017-11-19T14:00:01+01:00</lastmod>
+  </url><url>
+    <loc>https://broomburgo.github.io/fun-ios/post/on-abstraction/</loc>
+    <lastmod>2017-09-09T20:10:00+00:00</lastmod>
+  </url><url>
+    <loc>https://broomburgo.github.io/fun-ios/categories/</loc>
+  </url><url>
     <loc>https://broomburgo.github.io/fun-ios/tags/</loc>
-    <priority>0</priority>
   </url>
-  
 </urlset>

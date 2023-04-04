@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Posts on Fun iOS</title>
@@ -7,11 +7,7 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>&amp;copy; &lt;a href=&#34;https://github.com/broomburgo&#34;&gt;Elviro Rocca&lt;/a&gt; 2018</copyright>
-    <lastBuildDate>Mon, 30 Jul 2018 15:00:00 +0200</lastBuildDate>
-    
-	<atom:link href="https://broomburgo.github.io/fun-ios/post/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Mon, 30 Jul 2018 15:00:00 +0200</lastBuildDate><atom:link href="https://broomburgo.github.io/fun-ios/post/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Why Monads?</title>
       <link>https://broomburgo.github.io/fun-ios/post/why-monads/</link>
@@ -48,7 +44,7 @@ In date Sep 8 2018 I modified the article further, by including Affine in the di
       
       <guid>https://broomburgo.github.io/fun-ios/post/on-abstraction/</guid>
       <description>This post is a direct answer to this other post, which itself is mostly an answer to a bunch of discussions on Twitter, talks and more posts. While this post has probably value by itself, it&amp;rsquo;s probably better to read the original post first, because I&amp;rsquo;m going to refer to some of its statements.
- There&amp;rsquo;s an interesting discussion going in the functional Swift community: whether using abstract data types, like Monoid, is actually useful, and how this relates to the way protocols are usually laid out in the standard library.</description>
+There&amp;rsquo;s an interesting discussion going in the functional Swift community: whether using abstract data types, like Monoid, is actually useful, and how this relates to the way protocols are usually laid out in the standard library.</description>
     </item>
     
   </channel>
